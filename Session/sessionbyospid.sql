@@ -1,6 +1,6 @@
---
--- List Session ID for a Given OS Process ID.
---
+
+prompt "List Session ID for a Given OS Process ID."
+
  
 SET PAUSE ON
 SET PAUSE 'Press Return to Continue'
