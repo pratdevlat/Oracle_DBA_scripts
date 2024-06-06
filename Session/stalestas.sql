@@ -1,8 +1,8 @@
 ##########################Longrunning stale stats
 
-select OWNER,TABLE_NAME,LAST_ANALYZED,STALE_STATS from DBA_TAB_STATISTICS where STALE_STATS='YES' and OWNER='&owner;
+select OWNER,TABLE_NAME,LAST_ANALYZED,STALE_STATS from DBA_TAB_STATISTICS where STALE_STATS='YES' and OWNER='&owner';
 
-*** statistics of objects of a specific sql id 
+########################################statistics of objects of a specific sql id 
 
 set lines 300 set pages 300
 col table_name for a40
