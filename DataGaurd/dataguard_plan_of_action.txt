@@ -1,0 +1,69 @@
+Activity
+
+
+Pre-check
+select name,open_mode,log_mode,controlfile_type from v$database;
+select force_logging from v$database;
+Check for tns cross server entries in tnsnames.ora
+sho parameter arch
+select name, force_logging from v$database; 
+
+Activity on PROD
+select name,open_mode,log_mode,controlfile_type from v$database;
+Database should be in Archive log mode
+
+If database is not in Archive log mode
+edit your init.ora / spfile with the following information 
+Alter system set log_archive_dest='+DATADG'
+alter system log_archive_format='arch_%r_%t_%s.arc'
+alter system log_archive_start=true
+
+Shut immediate
+startup mount
+alter database archivelog
+alter database open;
+
+
+If database is not in force logging
+alter database force logging;
+alter database open;
+Take full RMAN backup of the database along with current and standby controlfile.
+
+Set the below parameters
+Alter system set log_archive_config='DG_CONFIG=(<db_uniqname>)';
+alter system set log_archive_dest_1='LOCATION=<arch_location> VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=<db_uniqname>';
+alter system set log_archive_dest_2='SERVICE=<tnsname> LGWR ASYNC VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=<db_unique_name>';
+
+Create Stnadby logs on server for future switch
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 10 '<path>/standbyredo10.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 11 '<path>/standbyredo11.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 12 '<path>/standbyredo12.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 13 '<path>/standbyredo13.log' SIZE 500M;
+
+Activity on BCP
+Place the backup dump file to BCP server.
+Restore the database using standby controlfile
+
+
+Include the following in pfile
+log_archive_config='DG_CONFIG=(<db_uniqname>)';
+log_archive_dest_1='LOCATION=<archive_location> VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=<db_uniqname>';
+log_archive_dest_2='SERVICE=<tnsnames> LGWR ASYNC VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=<db_uniqname>';
+
+
+Make sure the parameter are set properly and DB is in force logging mode
+
+Create Stnadby logs on server
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 10 '<path>/standbyredo10.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 11 '<path>/standbyredo11.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 12 '<path>/standbyredo12.log' SIZE 500M;
+ALTER DATABASE ADD STANDBY LOGFILE GROUP 13 '<path>/standbyredo13.log' SIZE 500M;
+
+
+Put in recovery
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE USING CURRENT LOGFILE DISCONNECT;
+
+Post-check
+select PROCESS, STATUS from v$managed_standby;
+CHECK THE SYNC STATUS
+select max(sequence#) from v$log_history;
