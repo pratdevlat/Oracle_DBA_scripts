@@ -1,3 +1,4 @@
+------------------------procedue to get all details of catalog backup from rman catalog and send mail to team 
 create or replace procedure           RMAN_REPORT_MAIL(p_out OUT VARCHAR2)  is
 v_html CLOB;--varchar2(32000);
 v_html2 CLOB;
