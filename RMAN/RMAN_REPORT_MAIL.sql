@@ -385,12 +385,12 @@ if v_count>0 then
     v_html3 := v_html2||v_html;
 
     v_subject := 'prathmesh RMAN Monitor Report for '||to_char(SYSDATE, 'DD-Mon-RRRR');
-    v_to :='DBA@int.prathmesh.com';
+    v_to :='DBA@prathmesh.com';
 
-    --v_to :='DBA@TLV.prathmesh.com';
+    --v_to :='DBA@prathmesh.com';
 
 
-    --v_to := 'tamirla@prathmesh.com';
+
     --DBMS_OUTPUT.PUT_LINE('length: '||length(v_html3));
     --v_html3 := substr(v_html3,1,30000);
     BEGIN
