@@ -1,13 +1,5 @@
 
 
-[Satya's DBA Blog](https://satya-dba.blogspot.com/)
-===================================================
-
-February 26, 2020
------------------
-
- 
-
 ### Background Processes in oracle
 
 To maximize performance and accommodate many users, a multiprocess Oracle database system uses background processes. Background processes are the processes running behind the scene and are meant to perform certain maintenance activities or to deal with abnormal conditions arising in the instance. Each background process is meant for a specific purpose and its role is well defined.
