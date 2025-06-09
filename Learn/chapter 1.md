@@ -313,5 +313,132 @@ The structure of the index leaf node level is actually a doubly linked list. If 
 One characteristic of B\*Trees is that all leaf blocks should be on the same level of the tree. This level is also called the height of the index, and all traversals from the root block of the index to a leaf block will visit the same number of blocks. The index is height-balanced. Most B\*Tree indexes have a height of 2 or 3, even with millions of records. This means that finding the first leaf block through the index only takes 2 or 3 I/Os.
 
 ---
+# Database Tables
 
-I hope this merged document is helpful! Let me know if you need any further assistance.
+## Table Types
+
+In Oracle, there are mainly the following 9 table types:
+- Heap-organized table: This is a regular standard database table. Data is managed in it in a heap fashion. When data is added, the first free space in the segment that can accommodate the data is found and used. When data is deleted from the table, subsequent INSERTs and UPDATEs are allowed to reuse this space. This is where the name "heap" for this table type comes from. "Heap" refers to a set of spaces used in a somewhat random manner.
+- Index-organized table (IOT): These tables are stored in an index structure. This enforces a physical order on the rows themselves. Unlike heap tables, where data can be placed anywhere as long as there is space, in an index-organized table (IOT), data must be stored in the IOT in primary key order.
+- Index clustered table: A cluster refers to a group of one or more tables whose data is physically stored on the same database block. All rows with the same cluster key value are physically stored adjacent to each other. This structure achieves two goals. First, multiple tables can be physically stored together. Generally, you might think that a database block only contains data from one table, but for clustered tables, data from multiple tables might be stored in the same block. Second, all data containing the same cluster key value is physically stored together. Therefore, data is clustered together by the cluster key value, and the cluster key is built using a B*Tree index. The advantage of index clustered tables is that they can reduce disk I/O and improve query performance when multiple tables connected by a cluster key are frequently accessed.
+- Hash clustered table: These tables are similar to index clustered tables, but instead of using a B*Tree index to locate data by the cluster key, a hash cluster hashes the key value to a cluster, directly finding the database block where the data should be. In a hash cluster, the data is the index. Hash clustered tables are suitable for frequent data reads based on key equality comparisons.
+- Sorted hash clustered table: This table type was introduced in Oracle 10g. It combines some characteristics of hash clustered tables and IOTs. The concept is as follows: if your rows are hashed by a certain key value, and a series of records related to that key are written to the table in a specific sorted order and processed in that order.
+- Nested table: Nested tables are part of Oracle's object-relational extensions. They are essentially child tables in a parent/child relationship that are system-generated and maintained.
+- Temporary table: These tables store "draft" data during a transaction or session. Temporary tables allocate temporary segments from the current user's temporary tablespace as needed. Each session can only see the segments allocated to itself and will not see any data created by any other session. Temporary tables can be used to store temporary data, with the advantage that they generate significantly less redo compared to regular heap tables.
+- Object table: Object tables are created based on an object type. They have special properties that non-object tables do not. Object tables are a special type of heap-organized table, index-organized table, and temporary table; Oracle uses these types of tables, and even nested tables, to build object tables. Additionally, nested tables are also a type of object table structure.
+- External table: The data in these tables is not stored in the database but externally, meaning they are stored as regular operating system files. In Oracle 9i and later versions, external tables can be used to query files outside the database as if they were ordinary tables within the database.
+
+Regardless of the table type, the following basic information applies:
+- A table can have a maximum of 1000 columns. If a row contains more than 254 columns, Oracle internally stores it as multiple separate row pieces that point to each other, and these pieces must be reassembled into a complete row image when the row is used.
+- The number of rows in a table is theoretically infinite, but due to other limitations, it cannot actually reach "infinite".
+- A table can have as many indexes as there are permutations of columns.
+- Even within a single database, there can be an infinite number of tables.
+
+## Terminology
+
+### Segment
+
+A segment in Oracle is an object that occupies storage space on disk. There are many types of segments; the most common types are listed below:
+- Cluster: This segment type can store multiple tables. There are two types of clusters: B*Tree clusters and hash clusters. Clusters are typically used to store related data from multiple tables, pre-joined and stored on the same database block; they can also be used to store related information for a single table. The term "cluster" refers to the ability of this segment to physically group related information together.
+- Table: A table segment stores the data of a database table. This is probably the most commonly used segment type, often used in conjunction with index segments.
+- Table partition or subpartition: This segment type is used for partitioning and is very similar to a table segment. A table partition or subpartition stores a portion of the data from a table. A partitioned table consists of one or more table partition segments, and a composite partitioned table consists of one or more table subpartition segments.
+- Index: This segment type can store index structures.
+- Index partition: Similar to table partitions, this segment type contains a portion of an index. A partitioned index consists of one or more index partition segments.
+- LOB partition, LOB subpartition, LOB index, and LOB segment: LOB index and LOB segment types can store large object (LOB) structures. When partitioning a table that contains LOBs, the LOB segments are also partitioned, and LOB partition segments are used for this purpose.
+- Nested table: This is the segment type specified for nested tables, which are a special type of child table in a parent/child relationship.
+- Rollback segment and "Type2 undo" segment: Undone data is stored here. Rollback segments are segments manually created by DBAs. Type2 undo segments are automatically created and managed by Oracle.
+
+### Segment Space Management
+
+Starting from Oracle 9i, there are two methods for managing segment space:
+- Manual Segment Space Management (MSSM): You set FREELISTS, FREELIST GROUPS, PCTUSED, and other parameters to control how space within segments is allocated, used, and reused.
+- Automatic Segment Space Management (ASSM): You only need to control one parameter related to space usage, PCTFREE.
+
+### High-Water Mark
+
+If you imagine a table as a flat structure, or a series of blocks arranged from left to right, the High-Water Mark (HWM) is the rightmost block that has ever contained data.
+
+# Data Types
+
+## Overview
+
+Oracle provides 22 different SQL data types for use, briefly introduced as follows:
+- CHAR: This is a fixed-length string that will be padded with spaces to reach its maximum length. A non-null CHAR(10) contains 10 **bytes** of information. A CHAR field can store up to 2000 bytes of information.
+- NCHAR: This is a fixed-length string containing UNICODE formatted data. A non-null NCHAR(10) always contains 10 **characters** of information. An NCHAR field can store up to 2000 bytes of information.
+- VARCHAR2: This is a synonym for VARCHAR. This is a variable-length string. Unlike the CHAR type, it will not pad the field or variable with spaces to its maximum length. VARCHAR2(10) can contain 0 to 10 bytes of information, and it can store up to 4000 bytes of information. Starting from Oracle 12c, it can store up to 32767 bytes of information.
+- NVARCHAR2: This is a variable-length string containing UNICODE formatted data. NVARCHAR2(10) can contain 0 to 10 **characters** of information, and NVARCHAR2 can store up to 4000 bytes of information. Starting from Oracle 12c, it can store up to 32767 bytes of information.
+- RAW: This is a variable-length binary data type, meaning that data stored using this data type will not undergo character set conversion. This type can store up to 2000 bytes of information. Starting from Oracle 12c, it can store up to 32767 bytes of information.
+- NUMBER: This data type can store numbers with a precision of up to 38 digits, ranging from 1.0\*10^(-130) to 1.0\*10(126) (exclusive). Numbers of this type are stored in a variable-length format, with a length of 0 to 22 bytes (NULL values have a length of 0).
+- BINARY_FLOAT: A 32-bit single-precision floating-point number, supporting at least 6 digits of precision, occupying 5 bytes of storage on disk.
+- BINARY_DOUBLE: A 64-bit double-precision floating-point number, supporting at least 15 digits of precision, occupying 9 bytes of storage on disk.
+- LONG: Stores up to 2GB of character data. The LONG type is provided only for backward compatibility, so it is strongly recommended not to use the LONG type in new applications; use the CLOB type instead.
+- LONG RAW: The LONG RAW type can store up to 2GB of raw binary information. For the same reasons as LONG, it is recommended that all newly developed applications use the BLOB type.
+- DATE: This is a 7-byte fixed-width date/time data type, containing 7 attributes in total: century, year within century, month, day within month, hour, minute, and second.
+- TIMESTAMP: This is a 7-byte or 11-byte fixed-width date/time data type (higher precision uses 11 bytes). TIMESTAMP can include fractional seconds; TIMESTAMP with fractional seconds can retain up to 9 decimal places.
+- TIMESTAMP WITH TIME ZONE: Similar to the previous type, this is a 13-byte fixed-width TIMESTAMP, but it also provides time zone support. Because time zone information is stored with the TIMESTAMP, the time zone information at insertion will be preserved along with the time.
+- TIMESTAMP WITH LOCAL TIME ZONE: Similar to TIMESTAMP, this is a 7-byte or 11-byte fixed-width date/time data type (higher precision uses 11 bytes); however, this type is time zone sensitive. If data of this type is inserted or modified, the database will normalize the date/time part of the data, converting it to the database's time zone, by referencing the TIME ZONE provided in the data and the database's own time zone.
+- INTERVAL YEAR TO MONTH: This is a 5-byte fixed-width data type used to store a period of time. This type stores the period as years and months.
+- INTERVAL DAY TO SECOND: This is an 11-byte fixed-width data type used to store a period of time. This type stores the period as days/hours/minutes/seconds, and can also have up to 9 decimal places for fractional seconds.
+- BLOB: In Oracle 10g and later versions, it can store up to (4GB - 1)*(database block size) bytes of data. BLOB contains "binary" data that does not require character set conversion.
+- CLOB: In Oracle 10g and later versions, it can store up to (4GB - 1)*(database block size) bytes of data. CLOB is affected by character set conversion. This data type is well-suited for storing large blocks of plain text information.
+- NCLOB: In Oracle 10g and later versions, it can store up to (4GB - 1)*(database block size) bytes of data. NCLOB stores information encoded in the database's national character set, and like CLOB, this type is also affected by character set conversion.
+- BFILE: This data type can store an Oracle directory object and a filename in a database column, allowing us to read this file. This effectively allows you to access operating system files on the database server in a read-only manner, as if they were stored in a database table.
+- ROWID: ROWID is actually the address of a row in a database table; it is 10 bytes long. The information encoded in a ROWID is sufficient not only to locate each row on disk but also to identify the object to which the ROWID points.
+- UROWID: UROWID is a universal ROWID used for tables without a fixed ROWID (such as IOTs and tables accessed via heterogeneous database gateways). UROWID typically represents the value of the primary key, so the size of a UROWID varies depending on the object it points to.
+
+Types like INT, INTEGER, SMALLINT, FLOAT, REAL, etc., are actually implemented based on one of the fundamental types listed above; in other words, they are synonyms for Oracle's intrinsic types.
+
+## Character and Binary String Types
+
+Character data types in Oracle include CHAR, VARCHAR2, and their corresponding N-prefixed variants (NCHAR and NVARCHAR2). CHAR and NCHAR types can store 2000 bytes of text, while VARCHAR2 and NVARCHAR2 can hold 4000 bytes.
+
+Data in CHAR, VARCHAR2, NCHAR, and NVARCHAR2 will be converted between different character sets by the database as needed.
+
+# Parallel Execution
+
+Parallel execution is a feature available only in Oracle Enterprise Edition (not in Standard Edition).
+
+Parallel execution refers to the ability to physically divide a large serial task (including all DML and general DDL) into multiple smaller parts, which can be processed simultaneously.
+- Parallel query: This refers to the ability to use multiple operating system processes or threads to execute a query. Oracle will identify operations that can be executed in parallel (such as full table scans or large-scale sorting) and create a query plan to achieve parallel execution.
+- Parallel DML (PDML): This is essentially very similar to parallel query, but PDML primarily uses parallel processing to perform modifications (INSERT, UPDATE, DELETE, and MERGE).
+- Parallel DDL: Parallel DDL refers to Oracle's ability to execute large-scale DDL operations in parallel. For example, index rebuilding, creating a new index, data loading via CREATE TABLE AS SELECT, and reorganization of large tables can all use parallel processing.
+- Parallel loading: External tables and SQL\*Loader can load data in parallel.
+- Procedural parallelization: This refers to the ability to run developed code in parallel.
+
+There are also two other operations that can be implemented in parallel:
+- Parallel recovery: Oracle can parallelize database recovery operations.
+- Parallel propagation: Parallel execution also has a more typical data replication scenario, where Oracle Advanced Replication options can perform asynchronous parallel replication, and parallel mode can significantly improve the throughput of data replication operations.
+
+## When to Use Parallel Execution
+
+>The parallel query (PARALLEL QUERY) option is inherently not scalable.
+
+Parallel execution is inherently a non-scalable solution, designed to allow a single user or a specific SQL statement to occupy all database resources. If a feature allows one person to use all available resources, running two people using this feature will encounter significant contention issues. As the number of concurrent users on the system increases, the...
+
+# Partitioning
+
+Partitioning allows a table or index to be physically divided into multiple smaller, more manageable pieces. Although a partitioned table or index may consist of dozens of physical partitions, from the perspective of the application accessing the database, it accesses a single logical table or index. Each partition is an independent object that can be processed individually or as part of a larger object.
+
+## Partitioning Overview
+
+Partitioning uses a "divide and conquer" approach, suitable for managing very large tables and indexes. Partitioning introduces the concept of a partition key. Data is distributed to corresponding partitions based on its partition key value. The method of partitioning can be based on a range of key values, a list of key values, or a hash function value of the partition key. Here are some benefits of partitioning:
+- Improved data availability: This applies to any type of system, regardless of whether it is primarily an OLTP or data warehouse system.
+- Breaking down large segments into smaller segments, thereby reducing management burden: Performing management operations on a 100GB table is much more burdensome than performing the same operation 10 times on individual 10GB table partitions. Additionally, by using partitioning, we can delete data without leaving fragmented space, thus eliminating the need to reorganize the table!
+- Improved performance for certain queries: This is mainly for large data warehousing environments. By using partitioning, we can skip data in certain partitions, thereby narrowing the range of data that needs to be accessed and processed. However, this is not applicable in transactional systems, as such systems typically access only small amounts of data.
+- Distributing data modifications across multiple partitions, thereby reducing contention on high-load OLTP systems: If an application experiences severe contention for a certain segment, we can divide it into multiple segments, which can proportionally reduce contention.
+
+### Increased Availability
+
+Increased availability stems from the independence of each partition. The availability (or unavailability) of one partition in a table (index) does not affect the availability of the table (index) itself. If your table (index) is partitioned, the query optimizer will be aware of this and eliminate unnecessary partitions from the execution plan. For example, if one partition in a large object is unavailable, but your query does not need that partition, Oracle can still successfully process the query.
+
+### Reduced Management Burden
+
+The partitioning mechanism reduces the management burden because performing the same operation on smaller objects is easier, faster, and consumes fewer resources compared to performing it on a large object.
+
+### Enhanced Statement Performance
+
+The third benefit of partitioning is its ability to enhance the performance of some SQL statements (SELECT, INSERT, UPDATE, DELETE, MERGE). These SQL statements fall into two categories: those that modify information and those that read information.
+
+1. Parallel DML
+Statements that modify data in the database can be executed in parallel (Parallel DML, PDML). When executed in PDML mode, Oracle uses multiple threads or processes to perform INSERT, UPDATE, DELETE, or MERGE, rather than executing them serially in a single process. On a multi-CPU host with sufficient I/O bandwidth, this large-scale operation...
+
