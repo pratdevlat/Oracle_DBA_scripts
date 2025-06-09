@@ -39,11 +39,11 @@ WHERE name LIKE '%free memory%';
 ### Additional Tips:
 
 * Use **hugepages** on Linux for better performance.
-# HugePages in Oracle Database: Overview and Calculator
+# **HugePages in Oracle Database: Overview and Calculator**
 
 ---
 
-## What are HugePages?
+**## What are HugePages?**
 
 **HugePages** (also called **Large Pages**) are a Linux kernel feature that allows Oracle to allocate SGA memory using larger memory pages than the default (typically 4 KB).
 
@@ -61,7 +61,9 @@ WHERE name LIKE '%free memory%';
 ## 2️ Why Use HugePages in Oracle?
 
 ✅ **Better Performance**: Fewer page table entries, less CPU spent managing memory.
+
 ✅ **Non-Swappable**: Keeps the SGA resident in memory, preventing paging.
+
 ✅ **Recommended**: Especially when SGA is >4 GB or for multi-instance environments.
 
 ---
