@@ -43,7 +43,7 @@ WHERE name LIKE '%free memory%';
 
 ---
 
-**## What are HugePages?**
+****## What are HugePages?****
 
 **HugePages** (also called **Large Pages**) are a Linux kernel feature that allows Oracle to allocate SGA memory using larger memory pages than the default (typically 4 KB).
 
