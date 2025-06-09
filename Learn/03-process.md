@@ -1,6 +1,3 @@
-Here’s the English translation of the document:
-
----
 
 # Oracle Processes
 
