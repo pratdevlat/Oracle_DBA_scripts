@@ -524,3 +524,130 @@ Absolutely! Here's a detailed **Q&A format** for the **Real-World Scenarios & Tr
 **Education**: I conduct sessions on execution plans, bind variables, and indexing strategies to bridge the gap.
 
 
+
+### **1. A database is experiencing significant "latch free" waits. How would you investigate the root cause of this contention?**
+
+**Answer:**
+- Identify the specific latch using `v$latch`, `v$latch_children`, and `v$session_wait`.
+- Check `P1`, `P2`, and `P3` values in `v$session` to decode latch type and address.
+- Use `AWR` or `ASH` to find the SQL or code path causing contention.
+- Common causes include:
+  - Excessive parsing (shared pool latch)
+  - Hot blocks (cache buffers chains latch)
+- Solutions may involve:
+  - Reducing hard parsing
+  - Tuning SQL
+  - Increasing relevant memory pools
+
+---
+
+### **2. Explain the difference between the SGA and the PGA. Describe a situation where you had to adjust one to resolve a bottleneck.**
+
+**Answer:**
+- **SGA (System Global Area)**: Shared memory for all sessions (e.g., buffer cache, shared pool).
+- **PGA (Program Global Area)**: Private memory for a session (e.g., sort area, hash joins).
+
+**Scenario**: High disk sorts during batch jobs.
+
+**Resolution**: Increased `PGA_AGGREGATE_TARGET`, which reduced disk I/O and improved sort performance.
+
+---
+
+### **3. What is the purpose of the Database Buffer Cache? How would you use `V$DB_CACHE_ADVICE` to size it?**
+
+**Answer:**
+- The **Buffer Cache** stores frequently accessed data blocks in memory to reduce physical I/O.
+- `V$DB_CACHE_ADVICE` shows estimated physical reads for different cache sizes.
+- I use it to:
+  - Evaluate if increasing cache would reduce I/O.
+  - Justify memory allocation changes based on workload patterns.
+
+---
+
+### **4. Your system is showing high "log file sync" wait events. What are the common causes and how would you troubleshoot this?**
+
+**Answer:**
+**Causes**:
+- Frequent commits
+- Slow I/O on redo logs
+- Contention on redo log buffers
+
+**Troubleshooting**:
+- Check `v$session_wait` and `v$log` for commit frequency and log file stats.
+- Use AWR to identify sessions with high commit rates.
+- Tune commit frequency in the application or move redo logs to faster storage.
+
+---
+
+### **5. What is direct path I/O, and when is it beneficial? How can you detect it?**
+
+**Answer:**
+- **Direct Path I/O** bypasses the buffer cache and reads/writes directly to disk.
+- Beneficial for:
+  - Large table scans
+  - Parallel queries
+  - Bulk loads (e.g., `INSERT /*+ APPEND */`)
+
+**Detection**:
+- Wait events like `direct path read`, `direct path write` in AWR/ASH.
+- Enabled via hints or parallel execution.
+
+---
+
+### **6. How do you diagnose and resolve excessive hard parsing?**
+
+**Answer:**
+**Diagnosis**:
+- High `parse count (hard)` in AWR.
+- Low library cache hit ratio.
+- Frequent `library cache latch` waits.
+
+**Resolution**:
+- Promote use of **bind variables**.
+- Use **session cursor caching**.
+- Tune shared pool size and cursor sharing settings.
+
+---
+
+### **7. A user reports their session is "hanging." How do you investigate?**
+
+**Answer:**
+- Identify session using `v$session` (filter by username or SID).
+- Check `v$session_wait` or `v$session_event` for wait events.
+- Use `v$lock` and `v$session_blockers` to detect blocking sessions.
+- If blocked, trace the blocker and resolve the contention (e.g., kill session or tune SQL).
+
+---
+
+### **8. What is a "library cache miss"? What causes it and how do you fix it?**
+
+**Answer:**
+- Occurs when a SQL statement is not found in the shared pool.
+- Causes:
+  - Excessive use of literals
+  - Frequent hard parsing
+  - Insufficient shared pool size
+
+**Fixes**:
+- Use bind variables
+- Increase shared pool
+- Use `CURSOR_SHARING = FORCE` (with caution)
+
+---
+
+### **9. Describe a time you resolved a deadlock (ORA-00060). What tools did you use?**
+
+**Answer:**
+**Scenario**: Two sessions updating rows in reverse order caused a deadlock.
+
+**Tools Used**:
+- Alert log and trace files (contain deadlock graph)
+- `v$session`, `v$locked_object`, `dba_blockers`, `dba_waiters`
+
+**Resolution**:
+- Identified the conflicting SQLs.
+- Changed application logic to access rows in consistent order.
+- Added retry logic for transient deadlocks.
+
+
+
