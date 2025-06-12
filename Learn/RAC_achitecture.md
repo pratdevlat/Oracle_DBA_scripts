@@ -1,4 +1,7 @@
-Oracle RAC Architecture and ComponentsOracle Real Application Clusters (RAC) is a shared-everything architecture that allows multiple Oracle database instances, running on separate servers (nodes), to simultaneously access and manage a single, shared set of database files. This provides high availability, scalability, and flexibility for business-critical applications.Oracle RAC Architecture Diagram (Text-Based)+------------------+     +------------------+     +------------------+
+Oracle RAC Architecture and ComponentsOracle Real Application Clusters (RAC) is a shared-everything architecture that allows multiple Oracle database instances, running on separate servers (nodes), to simultaneously access and manage a single, shared set of database files. This provides high availability, scalability, and flexibility for business-critical applications.Oracle RAC Architecture Diagram (Text-Based)
+
+
++------------------+     +------------------+     +------------------+
 |   CLIENT (App)   |     |   CLIENT (App)   |     |   CLIENT (App)   |
 +--------+---------+     +--------+---------+     +--------+---------+
          |                        |                        |
