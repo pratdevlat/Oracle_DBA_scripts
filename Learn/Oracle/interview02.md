@@ -909,15 +909,809 @@ dbca -silent -convertToRAC \
 SELECT inst_id, instance_name, status FROM gv$instance;
 ```
 
-**44. How do you handle recovery when the SYSTEM tablespace datafile is corrupted?**
+# Senior Oracle DBA Interview Questions (10+ Years Experience)
+## Questions 1-25: Architecture, Performance, and Core Administration
 
-**Answer:**
+### 1. You notice that your production RAC database is experiencing high library cache latch contention. Walk me through your troubleshooting approach and potential solutions.
 
+**Answer:** First, I'd identify the contention using AWR reports, focusing on the "Top 5 Timed Events" and "Latch Statistics" sections. I'd look for high waits on library cache latches and examine the latch sleep breakdown.
+
+**Troubleshooting steps:**
+- Query `V$LATCH` and `V$LATCH_CHILDREN` to identify specific latch addresses with high gets/misses
+- Use `V$LIBRARYCACHE` to check for high reloads and invalidations
+- Examine `V$SQL` for statements with high version counts
+- Check `V$SQLAREA` for cursor sharing issues
+
+**Root causes and solutions:**
+- **Literal SQL without bind variables:** Implement cursor_sharing=FORCE temporarily, then fix applications to use bind variables
+- **Large object invalidations:** Identify objects being frequently invalidated using `V$SQL_SHARED_CURSOR`
+- **Undersized shared pool:** Increase shared_pool_size, but monitor for over-allocation
+- **Hot blocks in library cache:** Use library cache partitioning in newer versions
+- **Application design issues:** Work with developers to implement proper connection pooling and statement caching
+
+**Immediate remediation:** I'd consider flushing shared pool during low-activity periods and implementing cursor_sharing as a temporary measure while addressing root causes.
+
+### 2. Your Data Guard primary database crashed during a bulk data load. The standby shows a gap in archive logs. How do you recover and resynchronize?
+
+**Answer:** This scenario requires careful assessment and systematic recovery.
+
+**Assessment phase:**
 ```sql
--- Critical situation - SYSTEM tablespace contains data dictionary
+-- On standby, check for gaps
+SELECT thread#, low_sequence#, high_sequence# 
+FROM v$archive_gap;
 
--- 1. Shutdown database immediately
-SHUTDOWN ABORT;
-
--- 2. Try to startup mount (may fail if control file references bad datafile)
+-- Check current applied sequence
+SELECT max(sequence#) FROM v$archived_log 
+WHERE applied='YES';
 ```
+
+**Recovery approach:**
+1. **Primary database recovery:** First, recover the primary database using RMAN
+2. **Gap resolution:** 
+   - If archive logs are available on primary, copy them to standby
+   - If logs are missing due to corruption, perform incremental backup-based recovery
+   ```sql
+   -- On primary
+   RMAN> BACKUP INCREMENTAL FROM SCN <standby_scn> DATABASE FORMAT '/backup/incr_%U';
+   
+   -- On standby
+   RMAN> CATALOG START WITH '/backup/incr_';
+   RMAN> RECOVER DATABASE NOREDO;
+   ```
+
+3. **Alternative approach - Reinitialize standby:**
+   - If gap is extensive, faster to recreate standby using RMAN DUPLICATE
+   - Ensure primary is stable before starting duplication
+
+**Prevention measures:**
+- Implement automatic gap resolution (Oracle 12c+)
+- Configure multiple archivelog destinations
+- Set up real-time apply with redo transport compression
+- Monitor standby lag using Enterprise Manager or custom scripts
+
+### 3. During peak hours, you observe that your OLTP system has high wait events on "enq: TX - row lock contention." How do you identify the blocking sessions and resolve this?
+
+**Answer:** Row lock contention indicates blocking transactions that need immediate attention.
+
+**Immediate identification:**
+```sql
+-- Find blocking sessions
+SELECT 
+    s1.sid blocking_sid, s1.serial# blocking_serial,
+    s1.username blocking_user, s1.program blocking_program,
+    s2.sid blocked_sid, s2.serial# blocked_serial,
+    s2.username blocked_user,
+    s1.last_call_et blocking_duration_sec,
+    l.type, l.lmode, l.request
+FROM v$lock l1, v$session s1, v$lock l2, v$session s2
+WHERE s1.sid = l1.sid AND s2.sid = l2.sid
+    AND l1.block = 1 AND l2.request > 0
+    AND l1.id1 = l2.id1 AND l1.id2 = l2.id2;
+
+-- Identify specific objects and rows being locked
+SELECT 
+    do.object_name, do.object_type,
+    l.sid, s.serial#, s.username,
+    decode(l.lmode,0,'None',1,'Null',2,'Row-S',3,'Row-X',4,'Share',5,'S/Row-X',6,'Exclusive') lock_mode
+FROM v$locked_object l, dba_objects do, v$session s
+WHERE l.object_id = do.object_id AND l.session_id = s.sid;
+```
+
+**Analysis approach:**
+- Check if blocking session is active or idle
+- Review SQL being executed by blocking session
+- Examine transaction duration and scope
+- Identify if it's a deadlock situation
+
+**Resolution strategies:**
+1. **Active blocking session:** Contact application team to commit/rollback
+2. **Idle blocking session:** Consider killing session after business approval
+3. **Application-level deadlock:** Review application logic for lock ordering
+4. **Long-running transaction:** Implement checkpointing in batch processes
+
+**Long-term solutions:**
+- Implement proper transaction scoping in applications
+- Use SELECT FOR UPDATE with NOWAIT where appropriate
+- Consider row-level partitioning for hot tables
+- Implement application-level queuing for high-contention operations
+
+### 4. You need to upgrade a 11.2.0.4 database to Oracle 19c in a production environment with minimal downtime. What's your detailed approach?
+
+**Answer:** A major version upgrade requires extensive planning and testing.
+
+**Pre-upgrade preparation (2-3 months):**
+1. **Compatibility assessment:**
+   - Run Pre-Upgrade Information Tool (preupgrd.sql)
+   - Check for deprecated features using DBUA or manual scripts
+   - Identify applications requiring recertification
+   - Review initialization parameters for obsolete settings
+
+2. **Testing strategy:**
+   - Create identical test environment with production data subset
+   - Perform complete upgrade testing including fallback procedures
+   - Test all applications and custom code
+   - Performance benchmark comparison
+
+**Upgrade approach options:**
+1. **Database Upgrade Assistant (DBUA):** Simplest but longer downtime
+2. **Manual upgrade with parallel processing:** More control, potentially faster
+3. **Transportable tablespaces:** For very large databases with partitioned downtime
+4. **Oracle GoldenGate:** Near-zero downtime but complex setup
+
+**Recommended approach for minimal downtime:**
+```bash
+# 1. Create guaranteed restore point before upgrade
+SQL> CREATE RESTORE POINT pre_upgrade_19c GUARANTEE FLASHBACK DATABASE;
+
+# 2. Run parallel upgrade using catctl.pl
+$ORACLE_HOME/perl/bin/perl catctl.pl -n 4 -l /upgrade_logs catupgrd.sql
+
+# 3. Run post-upgrade scripts
+@?/rdbms/admin/catuppst.sql
+@?/rdbms/admin/utlrp.sql
+```
+
+**Fallback strategy:**
+- Flashback database to restore point (fastest)
+- RMAN restore if flashback unavailable
+- Export/import for specific objects if needed
+
+**Post-upgrade validation:**
+- Run dbupgdiag.sql to validate upgrade
+- Gather dictionary statistics
+- Update optimizer statistics
+- Test critical application functions
+- Monitor performance for first week
+
+### 5. Your ASM diskgroup shows "MOUNT RESTRICTED" status. What are the possible causes and how do you troubleshoot?
+
+**Answer:** MOUNT RESTRICTED indicates ASM diskgroup integrity issues requiring immediate attention.
+
+**Possible causes:**
+1. **Disk offline/failure:** Physical disk problems or path issues
+2. **Metadata corruption:** ASM metadata inconsistencies
+3. **Insufficient redundancy:** Not enough disks for required redundancy level
+4. **Authentication issues:** ASM password file problems
+
+**Troubleshooting steps:**
+```sql
+-- Check diskgroup status and disk conditions
+SELECT name, state, type, total_mb, free_mb FROM v$asm_diskgroup;
+SELECT path, state, mode_status, header_status FROM v$asm_disk;
+
+-- Check for ASM errors
+SELECT message_text, message_level FROM v$asm_operation;
+SELECT facility, severity, message_text FROM x$dbgalertext WHERE originating_timestamp > sysdate-1;
+```
+
+**Resolution approach:**
+1. **For disk failures:**
+   ```sql
+   -- Add replacement disk
+   ALTER DISKGROUP DATA ADD DISK '/dev/raw/raw7';
+   
+   -- Drop failed disk (forces rebalance)
+   ALTER DISKGROUP DATA DROP DISK ASM_DISK_003 FORCE;
+   ```
+
+2. **For metadata corruption:**
+   ```bash
+   # Use amdu to extract metadata
+   amdu -diskstring '/dev/raw/raw*' -extract DATA.256.file
+   
+   # Run ASM validation
+   asmcmd> lsdg -g
+   asmcmd> lsattr -l -G DATA
+   ```
+
+3. **For authentication issues:**
+   ```bash
+   # Recreate ASM password file
+   orapwd file=$ORACLE_HOME/dbs/orapw+ASM password=oracle entries=10
+   ```
+
+**Prevention measures:**
+- Implement ASM disk monitoring using Grid Infrastructure
+- Use ASM preferred mirror read for better availability
+- Configure ASM fast mirror resync
+- Regular ASM metadata backup using ASMCMD
+
+### 6. You're asked to migrate a 2TB Oracle database to PostgreSQL. What's your comprehensive migration strategy?
+
+**Answer:** Large-scale database migration requires thorough planning and multiple parallel workstreams.
+
+**Assessment phase (4-6 weeks):**
+1. **Schema analysis:**
+   - Inventory all database objects (tables, indexes, views, procedures, functions)
+   - Identify Oracle-specific features (PL/SQL packages, analytical functions, partitioning)
+   - Map Oracle data types to PostgreSQL equivalents
+   - Document dependencies and constraints
+
+2. **Application analysis:**
+   - Review application code for Oracle-specific SQL
+   - Identify embedded PL/SQL blocks
+   - Catalog all database connections and frameworks used
+
+**Migration strategy:**
+1. **Schema migration:**
+   ```bash
+   # Use ora2pg for initial conversion
+   ora2pg -t TABLE -o tables.sql
+   ora2pg -t CONSTRAINT -o constraints.sql
+   ora2pg -t INDEX -o indexes.sql
+   ```
+
+2. **Data migration options:**
+   - **For online migration:** Use Oracle GoldenGate with PostgreSQL adapters
+   - **For offline migration:** Export/Import with parallel processing
+   - **Hybrid approach:** Bulk load historical data, then CDC for recent changes
+
+3. **Code conversion:**
+   - Convert PL/SQL packages to PostgreSQL functions (PL/pgSQL)
+   - Rewrite Oracle-specific SQL constructs
+   - Implement equivalent partitioning strategies
+   - Convert Oracle sequences to PostgreSQL serial/identity columns
+
+**Execution approach:**
+```bash
+# Parallel data export from Oracle
+expdp system/password directory=DATA_PUMP_DIR dumpfile=table_%U.dmp 
+      parallel=8 tables=schema.table_name
+
+# Convert and load into PostgreSQL
+pg_restore -d target_db -j 8 converted_dump.sql
+```
+
+**Testing and validation:**
+- Data reconciliation using row counts and checksums
+- Performance testing with production-like workloads
+- Application functionality testing
+- Security and privilege validation
+
+**Cutover planning:**
+- Incremental data sync using CDC tools
+- Application connection string updates
+- Rollback procedures and timeline
+- Go-live validation checklist
+
+### 7. Your production database is experiencing intermittent ORA-00060 deadlock errors. How do you systematically diagnose and resolve this?
+
+**Answer:** Deadlock resolution requires understanding the lock contention patterns and application behavior.
+
+**Immediate diagnosis:**
+```sql
+-- Enable deadlock tracing
+ALTER SYSTEM SET events '60 trace name errorstack level 3';
+
+-- Check current deadlock information
+SELECT * FROM dba_waiters;
+SELECT * FROM dba_blockers;
+
+-- Review alert log for deadlock traces
+-- Examine trace files in udump directory
+```
+
+**Analysis approach:**
+1. **Parse deadlock graphs:** Understand which sessions and objects are involved
+2. **Identify resource types:** Row locks, table locks, or system locks
+3. **Analyze timing patterns:** Peak hours, specific operations, or random occurrence
+4. **Review application logic:** Transaction scope and lock acquisition order
+
+**Common deadlock scenarios and solutions:**
+
+1. **Foreign key without index:**
+   ```sql
+   -- Find unindexed foreign keys
+   SELECT c.table_name, c.column_name, c.constraint_name
+   FROM user_cons_columns c, user_constraints p
+   WHERE c.constraint_name = p.constraint_name
+     AND p.constraint_type = 'R'
+   MINUS
+   SELECT i.table_name, i.column_name, i.index_name  
+   FROM user_ind_columns i;
+   
+   -- Create missing indexes
+   CREATE INDEX idx_fk_table_id ON child_table(parent_id);
+   ```
+
+2. **Lock ordering issues:**
+   - Standardize transaction order across applications
+   - Implement consistent primary key ordering in batch updates
+   - Use SELECT FOR UPDATE with ORDER BY
+
+3. **Long-running transactions:**
+   ```sql
+   -- Identify long transactions
+   SELECT s.sid, s.serial#, s.username, s.program,
+          t.start_time, t.used_ublk, t.used_urec
+   FROM v$session s, v$transaction t
+   WHERE s.taddr = t.addr
+   ORDER BY t.start_time;
+   ```
+
+**Prevention strategies:**
+- Implement proper exception handling with rollback
+- Use NOWAIT or timeout clauses where appropriate
+- Reduce transaction scope and duration
+- Consider optimistic locking patterns
+- Implement retry logic with exponential backoff
+
+### 8. You discover that your RAC database has split-brain symptoms. How do you identify and resolve this critical situation?
+
+**Answer:** Split-brain in RAC is a critical situation requiring immediate attention to prevent data corruption.
+
+**Identification symptoms:**
+- Instances showing different cluster membership
+- Voting disk access issues
+- Network heartbeat failures
+- ORA-29740, ORA-29742 errors in alert logs
+- CSS daemon (ocssd) restart loops
+
+**Immediate assessment:**
+```bash
+# Check cluster status on all nodes
+crsctl stat res -t
+
+# Verify voting disk access
+crsctl query css votedisk
+
+# Check network connectivity
+oifcfg getif
+ping -I <private_interface> <other_node_private_ip>
+
+# Review CSS logs
+tail -f $GRID_HOME/log/<node>/cssd/ocssd.log
+```
+
+**Root cause analysis:**
+1. **Network issues:**
+   - Private interconnect failure
+   - Switch/network equipment problems
+   - MTU size mismatches
+
+2. **Storage issues:**
+   - Voting disk inaccessibility
+   - OCR corruption or unavailability
+   - Shared storage connectivity problems
+
+3. **Time synchronization:**
+   - Clock skew between nodes
+   - NTP service issues
+
+**Resolution steps:**
+
+1. **If cluster is still partially functional:**
+   ```bash
+   # Stop problematic instance gracefully
+   srvctl stop instance -d <db_name> -i <instance_name>
+   
+   # Restart cluster stack if needed
+   crsctl stop crs
+   crsctl start crs
+   ```
+
+2. **If complete cluster restart needed:**
+   ```bash
+   # Stop all instances and cluster services
+   srvctl stop database -d <db_name>
+   crsctl stop cluster -all
+   
+   # Verify and fix voting disk issues
+   crsctl replace votedisk <new_voting_disk_path>
+   
+   # Start cluster services
+   crsctl start cluster -all
+   ```
+
+3. **Network-related fixes:**
+   - Verify private interconnect configuration
+   - Check switch configuration and VLAN settings
+   - Validate MTU settings across network path
+   - Test network latency and packet loss
+
+**Prevention measures:**
+- Implement redundant private interconnects
+- Use multiple voting disks across different storage arrays
+- Configure network bonding/teaming
+- Regular cluster health monitoring
+- Proper time synchronization setup
+
+### 9. Your database's AWR report shows high "log file sync" wait events. What's your systematic approach to resolve this?
+
+**Answer:** High log file sync waits typically indicate redo log writing bottlenecks affecting commit performance.
+
+**Analysis approach:**
+```sql
+-- Check current redo log configuration
+SELECT group#, thread#, sequence#, bytes/1024/1024 mb, status FROM v$log;
+SELECT group#, member FROM v$logfile;
+
+-- Analyze log file sync statistics
+SELECT event, total_waits, total_timeouts, time_waited, average_wait
+FROM v$system_event WHERE event = 'log file sync';
+
+-- Check redo generation rate
+SELECT name, value FROM v$sysstat 
+WHERE name IN ('redo size', 'redo writes', 'redo write time');
+```
+
+**Root cause investigation:**
+
+1. **Storage performance issues:**
+   ```bash
+   # Check I/O statistics for redo log files
+   iostat -x 1 10
+   
+   # Verify disk latency for log file locations
+   orion -testname redo_test -run advanced
+   ```
+
+2. **Redo log sizing issues:**
+   ```sql
+   -- Check log switch frequency
+   SELECT to_char(first_time, 'YYYY-MM-DD HH24') hour,
+          count(*) switches
+   FROM v$log_history
+   WHERE first_time > sysdate - 7
+   GROUP BY to_char(first_time, 'YYYY-MM-DD HH24')
+   ORDER BY 1;
+   ```
+
+3. **Application behavior:**
+   ```sql
+   -- Identify sessions with high commit rates
+   SELECT s.sid, s.serial#, s.username, s.program,
+          st.value commits
+   FROM v$session s, v$sesstat st, v$statname sn
+   WHERE s.sid = st.sid AND st.statistic# = sn.statistic#
+     AND sn.name = 'user commits'
+   ORDER BY st.value DESC;
+   ```
+
+**Resolution strategies:**
+
+1. **Storage optimization:**
+   - Move redo logs to faster storage (SSD/NVMe)
+   - Separate redo logs from other database files
+   - Use raw devices or direct I/O
+   - Configure storage array write cache properly
+
+2. **Redo log configuration:**
+   ```sql
+   -- Add more redo log groups
+   ALTER DATABASE ADD LOGFILE GROUP 4 
+   ('/u01/oradata/redo04a.log', '/u02/oradata/redo04b.log') 
+   SIZE 1G;
+   
+   -- Increase redo log size
+   -- (Requires recreation of all log groups during low activity)
+   ```
+
+3. **Application tuning:**
+   - Reduce unnecessary commits in batch processes
+   - Implement batch commits instead of row-by-row commits
+   - Use COMMIT WRITE NOWAIT for non-critical operations
+   - Consider using NOLOGGING for bulk operations
+
+4. **Advanced solutions:**
+   - Enable commit_logging=BATCH for OLTP workloads
+   - Use In-Memory Column Store to reduce redo generation
+   - Consider Oracle Real Application Clusters for distributed load
+
+### 10. You need to perform point-in-time recovery to 2 hours ago, but some tablespaces were added after that time. How do you handle this complex recovery scenario?
+
+**Answer:** This scenario requires careful handling of timeline inconsistencies and new tablespaces.
+
+**Assessment phase:**
+```sql
+-- Identify tablespaces created after target time
+SELECT tablespace_name, created 
+FROM dba_tablespaces 
+WHERE created > (SYSDATE - 2/24);
+
+-- Check for any dropped tablespaces in that timeframe
+SELECT tablespace_name, drop_time 
+FROM dba_tablespace_usage_metrics 
+WHERE drop_time BETWEEN (SYSDATE - 2/24) AND SYSDATE;
+```
+
+**Recovery strategy options:**
+
+**Option 1: Exclude new tablespaces from recovery**
+```bash
+# Shutdown database
+shutdown immediate;
+
+# Start in mount mode
+startup mount;
+
+# Restore and recover excluding new tablespaces
+RMAN> RESTORE DATABASE SKIP TABLESPACE new_tbs1, new_tbs2;
+RMAN> RECOVER DATABASE SKIP TABLESPACE new_tbs1, new_tbs2 
+      UNTIL TIME "TO_DATE('2024-06-16 14:00:00', 'YYYY-MM-DD HH24:MI:SS')";
+
+# Open database with resetlogs
+RMAN> ALTER DATABASE OPEN RESETLOGS;
+
+# Drop the new tablespaces that couldn't be recovered
+SQL> DROP TABLESPACE new_tbs1 INCLUDING CONTENTS AND DATAFILES;
+```
+
+**Option 2: Partial database recovery with tablespace recreation**
+```bash
+# Recover to point in time
+RMAN> RECOVER DATABASE UNTIL TIME 
+      "TO_DATE('2024-06-16 14:00:00', 'YYYY-MM-DD HH24:MI:SS')";
+
+# Open with resetlogs
+RMAN> ALTER DATABASE OPEN RESETLOGS;
+
+# Recreate the new tablespaces
+SQL> CREATE TABLESPACE new_tbs1 
+     DATAFILE '/u01/oradata/new_tbs01.dbf' SIZE 1G;
+
+# Re-import or recreate objects that were in new tablespaces
+```
+
+**Option 3: Advanced recovery using auxiliary instance**
+```bash
+# Create auxiliary instance for recovery
+RMAN> DUPLICATE TARGET DATABASE TO auxiliary_db 
+      UNTIL TIME "TO_DATE('2024-06-16 14:00:00', 'YYYY-MM-DD HH24:MI:SS')";
+
+# Export required data from auxiliary
+expdp system/password directory=DATA_PUMP_DIR 
+      dumpfile=recovered_data.dmp schemas=target_schema
+
+# Import into current database after handling tablespace issues
+```
+
+**Handling complications:**
+1. **Objects spanning multiple tablespaces:** May need to recreate with different storage
+2. **Dependencies:** Check for foreign keys, views, synonyms pointing to affected objects
+3. **Application impact:** Coordinate with application teams for missing functionality
+
+**Validation steps:**
+```sql
+-- Verify database consistency
+ANALYZE TABLE important_table VALIDATE STRUCTURE CASCADE;
+
+-- Check for invalid objects
+SELECT owner, object_name, object_type 
+FROM dba_objects WHERE status = 'INVALID';
+
+-- Validate recovered data
+SELECT count(*) FROM critical_table 
+WHERE last_updated <= TO_DATE('2024-06-16 14:00:00', 'YYYY-MM-DD HH24:MI:SS');
+```
+
+### 11. Your database is running out of space in the SYSTEM tablespace. What immediate and long-term actions do you take?
+
+**Answer:** SYSTEM tablespace space issues are critical and require immediate action to prevent database shutdown.
+
+**Immediate assessment:**
+```sql
+-- Check current space usage
+SELECT tablespace_name, bytes/1024/1024/1024 gb_size, 
+       maxbytes/1024/1024/1024 gb_max_size,
+       (bytes-NVL(maxbytes,bytes))/1024/1024/1024 gb_available
+FROM dba_data_files WHERE tablespace_name = 'SYSTEM';
+
+-- Identify space usage by segment
+SELECT owner, segment_name, segment_type, bytes/1024/1024 mb
+FROM dba_segments 
+WHERE tablespace_name = 'SYSTEM' 
+ORDER BY bytes DESC;
+
+-- Check for objects that shouldn't be in SYSTEM
+SELECT owner, table_name, tablespace_name
+FROM dba_tables 
+WHERE tablespace_name = 'SYSTEM' 
+  AND owner NOT IN ('SYS','SYSTEM','OUTLN','DBSNMP');
+```
+
+**Immediate actions (next 15 minutes):**
+
+1. **Add space immediately:**
+   ```sql
+   -- Add datafile if possible
+   ALTER TABLESPACE SYSTEM 
+   ADD DATAFILE '/u01/oradata/system02.dbf' SIZE 1G 
+   AUTOEXTEND ON NEXT 100M MAXSIZE 2G;
+   
+   -- Or resize existing datafile
+   ALTER DATABASE DATAFILE '/u01/oradata/system01.dbf' 
+   RESIZE 2G;
+   ```
+
+2. **Emergency cleanup:**
+   ```sql
+   -- Purge recyclebin
+   PURGE DBA_RECYCLEBIN;
+   
+   -- Shrink audit trail if using database auditing
+   DELETE FROM sys.aud$ WHERE timestamp# < SYSDATE - 30;
+   COMMIT;
+   ```
+
+**Root cause analysis:**
+```sql
+-- Check for SYSTEM tablespace growth patterns
+SELECT to_char(timestamp, 'YYYY-MM-DD'), 
+       max(bytes)/1024/1024/1024 max_gb
+FROM dba_hist_tbspc_space_usage 
+WHERE tablespace_name = 'SYSTEM'
+GROUP BY to_char(timestamp, 'YYYY-MM-DD')
+ORDER BY 1;
+
+-- Identify recent object growth
+SELECT owner, segment_name, segment_type,
+       bytes/1024/1024 current_mb
+FROM dba_segments 
+WHERE tablespace_name = 'SYSTEM'
+  AND owner NOT IN ('SYS','SYSTEM')
+ORDER BY bytes DESC;
+```
+
+**Long-term resolution:**
+
+1. **Move non-system objects:**
+   ```sql
+   -- Create proper tablespace for application objects
+   CREATE TABLESPACE USERS_DATA
+   DATAFILE '/u01/oradata/users01.dbf' SIZE 500M
+   AUTOEXTEND ON NEXT 100M MAXSIZE 2G;
+   
+   -- Move tables to appropriate tablespace
+   ALTER TABLE app_user.large_table MOVE TABLESPACE USERS_DATA;
+   
+   -- Rebuild indexes
+   ALTER INDEX app_user.idx_large_table REBUILD TABLESPACE USERS_DATA;
+   ```
+
+2. **Implement monitoring:**
+   ```sql
+   -- Create space monitoring script
+   CREATE OR REPLACE PROCEDURE monitor_system_space AS
+   BEGIN
+     FOR rec IN (SELECT tablespace_name, 
+                        round(used_percent,2) pct_used
+                 FROM dba_tablespace_usage_metrics
+                 WHERE tablespace_name = 'SYSTEM')
+     LOOP
+       IF rec.pct_used > 85 THEN
+         -- Send alert or automatically extend
+         dbms_output.put_line('SYSTEM tablespace ' || rec.pct_used || '% full');
+       END IF;
+     END LOOP;
+   END;
+   ```
+
+3. **Preventive measures:**
+   - Set up automated monitoring with 80% threshold alerts
+   - Implement tablespace quotas for non-system users
+   - Regular audit trail cleanup procedures
+   - Establish proper data placement standards
+   - Configure autoextend with reasonable maxsize limits
+
+### 12. You're implementing Oracle Data Guard for a mission-critical database. Walk through your complete setup and testing strategy.
+
+**Answer:** Data Guard implementation for mission-critical systems requires meticulous planning and comprehensive testing.
+
+**Pre-implementation planning:**
+1. **Requirements gathering:**
+   - RTO (Recovery Time Objective) and RPO (Recovery Point Objective) requirements
+   - Network bandwidth and latency measurements
+   - Standby server sizing and storage requirements
+   - Compliance and regulatory requirements
+
+2. **Architecture decisions:**
+   - Physical vs. Logical standby (Physical for most use cases)
+   - Synchronous vs. Asynchronous transport (SYNC for zero data loss)
+   - Real-time apply vs. Delayed apply
+   - Multiple standby locations for disaster recovery
+
+**Implementation steps:**
+
+**Phase 1: Primary database preparation**
+```sql
+-- Enable force logging
+ALTER DATABASE FORCE LOGGING;
+
+-- Configure archive log mode
+SHUTDOWN IMMEDIATE;
+STARTUP MOUNT;
+ALTER DATABASE ARCHIVELOG;
+ALTER DATABASE OPEN;
+
+-- Set up initialization parameters
+ALTER SYSTEM SET log_archive_config='DG_CONFIG=(PRIMARY,STANDBY)';
+ALTER SYSTEM SET log_archive_dest_1='LOCATION=/u01/archive/ VALID_FOR=(ALL_LOGFILES,ALL_ROLES) DB_UNIQUE_NAME=PRIMARY';
+ALTER SYSTEM SET log_archive_dest_2='SERVICE=STANDBY LGWR SYNC AFFIRM VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=STANDBY';
+ALTER SYSTEM SET log_archive_dest_state_2=ENABLE;
+ALTER SYSTEM SET remote_login_passwordfile=EXCLUSIVE;
+ALTER SYSTEM SET fal_server=STANDBY;
+ALTER SYSTEM SET fal_client=PRIMARY;
+```
+
+**Phase 2: Standby database creation**
+```bash
+# Create standby database using RMAN DUPLICATE
+rman target sys/password@PRIMARY auxiliary sys/password@STANDBY
+
+DUPLICATE TARGET DATABASE FOR STANDBY FROM ACTIVE DATABASE
+SPFILE
+PARAMETER_VALUE_CONVERT 'PRIMARY','STANDBY'
+SET db_unique_name='STANDBY'
+SET log_archive_dest_1='LOCATION=/u01/archive/'
+SET log_archive_dest_2='SERVICE=PRIMARY LGWR SYNC AFFIRM VALID_FOR=(ONLINE_LOGFILES,PRIMARY_ROLE) DB_UNIQUE_NAME=PRIMARY'
+SET fal_server='PRIMARY'
+SET fal_client='STANDBY';
+```
+
+**Phase 3: Configure Data Guard Broker**
+```bash
+# Enable Data Guard Broker
+dgmgrl sys/password@PRIMARY
+DGMGRL> CREATE CONFIGURATION 'DG_CONFIG' AS PRIMARY DATABASE IS 'PRIMARY' CONNECT IDENTIFIER IS 'PRIMARY';
+DGMGRL> ADD DATABASE 'STANDBY' AS CONNECT IDENTIFIER IS 'STANDBY';
+DGMGRL> ENABLE CONFIGURATION;
+```
+
+**Testing strategy:**
+
+**Functional testing:**
+```bash
+# Test log transport and apply
+DGMGRL> SHOW CONFIGURATION;
+DGMGRL> SHOW DATABASE 'PRIMARY';
+DGMGRL> SHOW DATABASE 'STANDBY';
+
+# Verify log shipping
+SQL> ALTER SYSTEM SWITCH LOGFILE;
+SQL> SELECT max(sequence#) FROM v$archived_log WHERE applied='YES';
+```
+
+**Failover testing:**
+```bash
+# Test switchover (planned)
+DGMGRL> SWITCHOVER TO 'STANDBY';
+
+# Test failover (unplanned)
+DGMGRL> FAILOVER TO 'STANDBY';
+
+# Test flashback after failover
+SQL> SELECT current_scn FROM v$database;
+RMAN> FLASHBACK DATABASE TO SCN <scn_before_failover>;
+```
+
+**Performance testing:**
+- Measure redo transport overhead during peak loads
+- Test network saturation scenarios
+- Validate apply performance with different lag scenarios
+- Test backup operations on standby database
+
+**Monitoring and alerting:**
+```sql
+-- Create monitoring views
+CREATE OR REPLACE VIEW dg_status AS
+SELECT name, value, datum_time 
+FROM v$dataguard_stats
+WHERE name IN ('transport lag', 'apply lag', 'apply finish time');
+
+-- Set up automated monitoring
+CREATE OR REPLACE PROCEDURE check_dg_lag AS
+  v_transport_lag NUMBER;
+  v_apply_lag NUMBER;
+BEGIN
+  SELECT value INTO v_transport_lag 
+  FROM v$dataguard_stats WHERE name = 'transport lag';
+  
+  IF v_transport_lag > 300 THEN -- 5 minutes
+    -- Send alert
+    dbms_output.put_line('High transport lag: ' || v_transport_lag);
+  END IF;
+END;
+```
+
