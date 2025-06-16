@@ -1,7 +1,3 @@
-# Oracle Database Query Performance Troubleshooting Guide
-
-## 100+ Questions & Solutions for DBAs
-
 ### **Section 1: Basic Query Performance Issues (1-25)**
 
 **1. Query is running slower than usual - where do I start?**
