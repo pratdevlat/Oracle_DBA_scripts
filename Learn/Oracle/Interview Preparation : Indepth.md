@@ -753,7 +753,969 @@ SELECT comp_name, version, status FROM dba_registry;
 - Communication plan with stakeholders
 
 ---
+# Oracle DBA Interview Questions Part 2 (26-50)
+## Backup & Recovery and Performance Tuning Scenarios
+
+### Question 26: RMAN Block Corruption Recovery
+**Scenario:** During a routine backup, RMAN reports block corruption in a critical production table. The database is 24x7 with minimal downtime allowed. How would you handle this situation?
+
+**Answer:**
+First, I'd assess the extent of corruption and business impact:
+
+```sql
+-- Check for corruption details
+SELECT * FROM V$DATABASE_BLOCK_CORRUPTION;
+
+-- Identify affected segments
+SELECT owner, segment_name, segment_type 
+FROM dba_extents 
+WHERE file_id = &file_id 
+AND &block_id BETWEEN block_id AND block_id + blocks - 1;
+```
+
+My recovery approach would depend on the corruption extent:
+
+1. **For limited corruption (few blocks):**
+   - Use RMAN block media recovery (BMR) for online recovery:
+   ```bash
+   RMAN> BLOCKRECOVER DATAFILE 5 BLOCK 100,101,102;
+   ```
+   - This requires valid backups and archived logs
+   - Zero downtime for users
+
+2. **If BMR fails or extensive corruption:**
+   - Create a temporary table using DBMS_REPAIR to skip corrupted blocks:
+   ```sql
+   BEGIN
+     DBMS_REPAIR.SKIP_CORRUPT_BLOCKS(
+       schema_name => 'SCHEMA',
+       object_name => 'TABLE_NAME',
+       object_type => DBMS_REPAIR.TABLE_OBJECT,
+       flags => DBMS_REPAIR.SKIP_FLAG);
+   END;
+   ```
+   - Export non-corrupted data using Data Pump with QUERY parameter
+   - Recreate the table and import data
+
+3. **Prevention measures implemented:**
+   - Enabled RMAN block change tracking for faster corruption detection
+   - Configured DB_BLOCK_CHECKSUM = TYPICAL
+   - Scheduled regular VALIDATE DATABASE commands
+   - Implemented ASM redundancy for critical tablespaces
+
+### Question 27: Complex PITR Scenario
+**Scenario:** A developer accidentally dropped a critical table at 2:30 PM. It's now 5:00 PM, and significant transactions have occurred since. You need to recover the table without losing subsequent transactions. How do you proceed?
+
+**Answer:**
+This requires a tablespace point-in-time recovery (TSPITR) or table recovery approach:
+
+**Option 1: Table Recovery (12c and above):**
+```bash
+RMAN> RECOVER TABLE schema.table_name 
+      UNTIL TIME "TO_DATE('2024-01-15 14:29:00','YYYY-MM-DD HH24:MI:SS')"
+      AUXILIARY DESTINATION '/u01/aux_dest'
+      REMAP TABLE schema.table_name:table_name_recovered;
+```
+
+**Option 2: For older versions or if Option 1 fails:**
+1. Create auxiliary instance for TSPITR:
+```bash
+# Create auxiliary instance parameter file
+DB_NAME=auxdb
+DB_UNIQUE_NAME=auxdb
+CONTROL_FILES='/u01/aux/control01.ctl'
+DB_FILE_NAME_CONVERT=('/u01/oradata/','/u01/aux/')
+LOG_FILE_NAME_CONVERT=('/u01/oradata/','/u01/aux/')
+```
+
+2. Perform TSPITR:
+```bash
+RMAN> RECOVER TABLESPACE users 
+      UNTIL TIME "TO_DATE('2024-01-15 14:29:00','YYYY-MM-DD HH24:MI:SS')"
+      AUXILIARY DESTINATION '/u01/aux_dest';
+```
+
+3. Export the recovered table from auxiliary:
+```bash
+expdp system/password@auxdb tables=schema.table_name 
+      directory=dpump_dir dumpfile=recovered_table.dmp
+```
+
+4. Import into production with different name:
+```bash
+impdp system/password tables=schema.table_name 
+      remap_table=schema.table_name:table_name_recovered
+      directory=dpump_dir dumpfile=recovered_table.dmp
+```
+
+5. Reconcile data:
+   - Compare recovered vs current data
+   - Merge missing records using SQL
+   - Validate referential integrity
+
+### Question 28: RAC Environment Backup Strategy
+**Scenario:** You're designing a backup strategy for a 4-node RAC cluster with 50TB database size, RPO of 1 hour, and RTO of 2 hours. How would you implement this?
+
+**Answer:**
+My comprehensive RAC backup strategy would include:
+
+**1. Backup Infrastructure:**
+- Dedicated backup network (10GbE minimum) to avoid impacting cluster interconnect
+- Shared storage for backups accessible from all nodes (NFS/ASM)
+- Media management layer (NetBackup/TSM) for tape archival
+
+**2. RMAN Configuration:**
+```sql
+-- Configure parallelism across nodes
+CONFIGURE DEVICE TYPE DISK PARALLELISM 4;
+CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+
+-- Enable backup optimization
+CONFIGURE BACKUP OPTIMIZATION ON;
+
+-- Set retention policy
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;
+
+-- Configure autobackup
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '+FRA/%F';
+
+-- Enable block change tracking
+ALTER DATABASE ENABLE BLOCK CHANGE TRACKING USING FILE '+DATA/bct.chg';
+```
+
+**3. Backup Schedule:**
+- **Level 0 (Weekly):** Distributed across nodes
+  ```bash
+  # Node 1: Datafiles 1-25%
+  BACKUP INCREMENTAL LEVEL 0 DATAFILE 1,2,3... SECTION SIZE 32G;
+  
+  # Node 2: Datafiles 26-50%
+  # Node 3: Datafiles 51-75%
+  # Node 4: Datafiles 76-100%
+  ```
+
+- **Level 1 (Daily):** Cumulative incremental
+  ```bash
+  BACKUP INCREMENTAL LEVEL 1 CUMULATIVE DATABASE 
+  SECTION SIZE 32G FILESPERSET 4;
+  ```
+
+- **Archived Logs (Hourly):** Meeting 1-hour RPO
+  ```bash
+  BACKUP ARCHIVELOG ALL DELETE INPUT;
+  ```
+
+**4. Performance Optimization:**
+- Used SECTION SIZE for parallel intra-file backup
+- Configured multiple channels per node
+- Implemented backup compression (MEDIUM algorithm)
+- Scheduled backups during low-activity windows
+- Used BCT file to minimize incremental backup time
+
+**5. Recovery Testing:**
+- Automated monthly restore validation
+- Quarterly disaster recovery drills
+- Documented runbooks for various scenarios
+
+### Question 29: Performance Crisis - High CPU Usage
+**Scenario:** Production database suddenly experiences 95% CPU usage. Users report extreme slowness. As the senior DBA, walk through your troubleshooting approach.
+
+**Answer:**
+My systematic approach for this critical situation:
+
+**1. Immediate Assessment (First 2 minutes):**
+```sql
+-- Check top CPU consuming sessions
+SELECT sid, serial#, username, sql_id, event, 
+       seconds_in_wait, state, machine, program
+FROM v$session 
+WHERE status = 'ACTIVE' 
+AND username IS NOT NULL
+ORDER BY cpu_time DESC;
+
+-- Check current wait events
+SELECT event, count(*) 
+FROM v$session 
+WHERE wait_class != 'Idle' 
+GROUP BY event 
+ORDER BY 2 DESC;
+
+-- OS level check
+!top -c
+!ps aux | grep ora | sort -nrk 3 | head -10
+```
+
+**2. Identify Root Cause:**
+```sql
+-- Check for recently changed SQL
+SELECT sql_id, plan_hash_value, executions, 
+       elapsed_time/executions avg_elapsed,
+       cpu_time/executions avg_cpu
+FROM v$sql
+WHERE last_active_time > SYSDATE - 1/24
+AND executions > 0
+ORDER BY cpu_time DESC;
+
+-- Check for plan changes
+SELECT sql_id, plan_hash_value, timestamp
+FROM dba_hist_sql_plan
+WHERE sql_id IN (SELECT sql_id FROM v$session WHERE status='ACTIVE')
+AND timestamp > SYSDATE - 1
+ORDER BY timestamp DESC;
+```
+
+**3. Quick Wins (If needed for immediate relief):**
+```sql
+-- Kill problematic sessions if business approved
+ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE;
+
+-- Flush specific SQL if bad plan
+BEGIN
+  DBMS_SHARED_POOL.PURGE('address,hash_value','C');
+END;
+
+-- Emergency resource manager activation
+ALTER SYSTEM SET RESOURCE_MANAGER_PLAN = 'EMERGENCY_PLAN';
+```
+
+**4. Root Cause Analysis:**
+Common causes I've encountered:
+- **Statistics issue:** Stale stats after bulk load
+  ```sql
+  EXEC DBMS_STATS.GATHER_TABLE_STATS('SCHEMA','TABLE',
+       method_opt=>'FOR ALL COLUMNS SIZE AUTO',
+       degree=>8, cascade=>TRUE);
+  ```
+
+- **Plan regression:** New plan after stats collection
+  ```sql
+  -- Create SQL Plan Baseline for good plan
+  var ret number;
+  exec :ret := DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE(
+    sql_id => 'bad_sql_id',
+    plan_hash_value => good_plan_hash_value);
+  ```
+
+- **Parallel query explosion:** 
+  ```sql
+  ALTER SESSION FORCE PARALLEL QUERY PARALLEL 4;
+  ALTER TABLE table_name PARALLEL 4;
+  ```
+
+**5. Long-term Solutions:**
+- Implemented SQL Plan Management
+- Created resource manager plans
+- Set up proactive monitoring alerts
+- Documented problematic SQL patterns
+
+### Question 30: AWR Analysis for Performance Issue
+**Scenario:** Users complain about slow response times between 2-4 PM daily. How would you use AWR to diagnose this issue?
+
+**Answer:**
+My structured AWR analysis approach:
+
+**1. Generate Targeted AWR Report:**
+```sql
+-- Find snap IDs for problem window
+SELECT snap_id, begin_interval_time, end_interval_time
+FROM dba_hist_snapshot
+WHERE begin_interval_time >= TO_DATE('2024-01-15 14:00','YYYY-MM-DD HH24:MI')
+AND end_interval_time <= TO_DATE('2024-01-15 16:00','YYYY-MM-DD HH24:MI')
+ORDER BY snap_id;
+
+-- Generate AWR report
+@$ORACLE_HOME/rdbms/admin/awrrpt.sql
+```
+
+**2. Key Sections Analysis:**
+
+**Load Profile:**
+- Check transactions/sec, physical reads/writes
+- Compare with baseline (non-problem period)
+- Look for unusual spikes
+
+**Top 5 Timed Events:**
+```sql
+-- Custom query for deeper analysis
+SELECT event, total_waits, time_waited, average_wait
+FROM dba_hist_system_event
+WHERE snap_id BETWEEN &begin_snap AND &end_snap
+AND wait_class != 'Idle'
+ORDER BY time_waited DESC;
+```
+
+**SQL Statistics:**
+- SQL ordered by Elapsed Time
+- SQL ordered by CPU Time
+- SQL ordered by Buffer Gets
+- SQL ordered by Physical Reads
+
+**3. Pattern Recognition:**
+Example findings from real scenario:
+- **Observation:** High "db file sequential read" waits
+- **SQL Analysis:** Found full table scans on large tables
+- **Root Cause:** Statistics job running at 2 PM
+- **Solution:** 
+  ```sql
+  -- Reschedule stats job to off-peak hours
+  BEGIN
+    DBMS_SCHEDULER.SET_ATTRIBUTE(
+      name => 'GATHER_STATS_JOB',
+      attribute => 'start_date',
+      value => SYSTIMESTAMP + INTERVAL '8' HOUR);
+  END;
+  ```
+
+**4. Comparative Analysis:**
+```sql
+-- AWR Compare report for problem vs normal period
+@$ORACLE_HOME/rdbms/admin/awrddrpt.sql
+
+-- Check for plan changes
+SELECT sql_id, COUNT(DISTINCT plan_hash_value) plan_count
+FROM dba_hist_sqlstat
+WHERE snap_id BETWEEN &begin_snap AND &end_snap
+GROUP BY sql_id
+HAVING COUNT(DISTINCT plan_hash_value) > 1;
+```
+
+**5. Recommendations Based on Findings:**
+- Index creation/modification
+- SQL tuning using profiles/baselines
+- System parameter adjustments
+- Hardware resource additions
+
+### Question 31: Complex Cloning Scenario
+**Scenario:** You need to clone a 10TB production database to create a test environment. The source is on Linux x86-64, and the target is on Solaris SPARC. Network bandwidth is limited. How do you approach this?
+
+**Answer:**
+This cross-platform cloning requires careful planning:
+
+**1. Initial Assessment:**
+```sql
+-- Check platform compatibility
+SELECT * FROM v$transportable_platform ORDER BY platform_id;
+
+-- Check endian format difference
+-- Linux x86-64: Little Endian
+-- Solaris SPARC: Big Endian (requires conversion)
+```
+
+**2. Method Selection:**
+Given the constraints, I'd use **Transportable Tablespaces with RMAN conversion**:
+
+**Phase 1: Preparation**
+```sql
+-- Check tablespace self-containment
+EXECUTE DBMS_TTS.TRANSPORT_SET_CHECK('USERS,APPS_DATA,APPS_INDEX', TRUE);
+SELECT * FROM transport_set_violations;
+
+-- Make tablespaces read-only
+ALTER TABLESPACE users READ ONLY;
+ALTER TABLESPACE apps_data READ ONLY;
+ALTER TABLESPACE apps_index READ ONLY;
+```
+
+**Phase 2: Metadata Export**
+```bash
+expdp system/password TRANSPORT_TABLESPACES=users,apps_data,apps_index \
+      DUMPFILE=tts_metadata.dmp DIRECTORY=data_pump_dir
+```
+
+**Phase 3: RMAN Conversion (Parallel Processing)**
+```bash
+# Convert datafiles for platform
+RMAN> CONVERT TABLESPACE users,apps_data,apps_index
+      TO PLATFORM 'Solaris[tm] OE (64-bit)'
+      PARALLELISM 4
+      FORMAT '/staging/%U';
+```
+
+**Phase 4: Transfer Strategy (Limited Bandwidth):**
+- **Compression:** Use RMAN compression or OS-level compression
+- **Parallel Transfer:** Split files and use multiple streams
+- **Incremental Approach:** 
+  ```bash
+  # Initial rsync
+  rsync -avz --progress /staging/* target_host:/u01/staging/
+  
+  # Subsequent delta syncs
+  rsync -avz --progress --delete /staging/* target_host:/u01/staging/
+  ```
+
+**Phase 5: Target Database Creation**
+```sql
+-- Create shell database on Solaris
+CREATE DATABASE testdb
+  DATAFILE '/u01/oradata/system01.dbf' SIZE 1G
+  SYSAUX DATAFILE '/u01/oradata/sysaux01.dbf' SIZE 1G
+  UNDO TABLESPACE undotbs1 DATAFILE '/u01/oradata/undo01.dbf' SIZE 2G
+  DEFAULT TEMPORARY TABLESPACE temp TEMPFILE '/u01/oradata/temp01.dbf' SIZE 2G;
+
+-- Import metadata
+impdp system/password TRANSPORT_DATAFILES='/u01/staging/users01.dbf',
+      '/u01/staging/apps_data01.dbf','/u01/staging/apps_index01.dbf'
+      DUMPFILE=tts_metadata.dmp DIRECTORY=data_pump_dir
+
+-- Make tablespaces read-write
+ALTER TABLESPACE users READ WRITE;
+ALTER TABLESPACE apps_data READ WRITE;
+ALTER TABLESPACE apps_index READ WRITE;
+```
+
+**3. Alternative for Regular Cloning:**
+Implemented GoldenGate for continuous replication:
+- Initial load using data pump
+- Real-time sync for regular refreshes
+- Minimal bandwidth usage after initial sync
+
+### Question 32: ASH Analysis for Intermittent Performance
+**Scenario:** Users report random 30-second freezes in the application. AWR doesn't show obvious issues. How do you use ASH to troubleshoot?
+
+**Answer:**
+ASH is perfect for capturing transient issues that AWR might miss:
+
+**1. Identify Problem Time Windows:**
+```sql
+-- Find high activity periods in ASH
+SELECT sample_time, COUNT(*) active_sessions
+FROM v$active_session_history
+WHERE sample_time BETWEEN SYSDATE-1/24 AND SYSDATE
+GROUP BY sample_time
+HAVING COUNT(*) > 50
+ORDER BY sample_time;
+```
+
+**2. Deep Dive into Spike Periods:**
+```sql
+-- Analyze wait events during spikes
+SELECT 
+  TO_CHAR(sample_time,'HH24:MI:SS') time,
+  event,
+  wait_class,
+  COUNT(*) sessions,
+  ROUND(COUNT(*)*100/SUM(COUNT(*)) OVER (), 2) pct
+FROM v$active_session_history
+WHERE sample_time BETWEEN 
+  TO_DATE('2024-01-15 14:30:00','YYYY-MM-DD HH24:MI:SS') AND
+  TO_DATE('2024-01-15 14:30:30','YYYY-MM-DD HH24:MI:SS')
+AND event IS NOT NULL
+GROUP BY TO_CHAR(sample_time,'HH24:MI:SS'), event, wait_class
+ORDER BY time, sessions DESC;
+```
+
+**3. Session-Level Analysis:**
+```sql
+-- Find blocking sessions during freeze
+SELECT 
+  sample_time,
+  session_id,
+  blocking_session,
+  event,
+  sql_id,
+  current_obj#,
+  time_waited
+FROM v$active_session_history
+WHERE sample_time BETWEEN 
+  TO_DATE('2024-01-15 14:30:00','YYYY-MM-DD HH24:MI:SS') AND
+  TO_DATE('2024-01-15 14:30:30','YYYY-MM-DD HH24:MI:SS')
+AND blocking_session IS NOT NULL
+ORDER BY sample_time;
+```
+
+**4. Real Case Resolution:**
+Found the issue was caused by:
+```sql
+-- Mutex contention on library cache
+SELECT 
+  P1TEXT, P1, 
+  COUNT(*) wait_count
+FROM v$active_session_history
+WHERE event LIKE 'library cache%'
+AND sample_time > SYSDATE - 1/24
+GROUP BY P1TEXT, P1
+ORDER BY wait_count DESC;
+
+-- Root cause: Excessive hard parsing due to literals
+SELECT force_matching_signature,
+       COUNT(*) cnt
+FROM v$sql
+WHERE force_matching_signature != 0
+GROUP BY force_matching_signature
+HAVING COUNT(*) > 100
+ORDER BY cnt DESC;
+```
+
+**5. Solution Implemented:**
+```sql
+-- Enable cursor sharing temporarily
+ALTER SYSTEM SET CURSOR_SHARING = FORCE;
+
+-- Long-term: Modified application to use bind variables
+-- Created SQL profiles for problematic statements
+DECLARE
+  my_task VARCHAR2(30);
+BEGIN
+  my_task := DBMS_SQLTUNE.CREATE_TUNING_TASK(
+    sql_id => 'problematic_sql_id',
+    scope => 'COMPREHENSIVE',
+    time_limit => 300);
+  DBMS_SQLTUNE.EXECUTE_TUNING_TASK(my_task);
+END;
+```
+
+### Question 33: RMAN Recovery Without Catalog
+**Scenario:** Your RMAN catalog database crashed. You need to perform an urgent recovery of a production database. How do you proceed?
+
+**Answer:**
+Recovery without catalog is possible using controlfile:
+
+**1. Verify Controlfile has Backup Information:**
+```sql
+-- Check retention policy and backup records
+SHOW CONTROL_FILE_RECORD_KEEP_TIME;
+-- Should be at least 7 days
+
+-- List available backups from controlfile
+RMAN> LIST BACKUP SUMMARY;
+RMAN> LIST BACKUP OF DATABASE COMPLETED AFTER 'SYSDATE-7';
+```
+
+**2. Restore Process:**
+```bash
+# If database is completely lost
+RMAN> STARTUP NOMOUNT;
+RMAN> RESTORE CONTROLFILE FROM AUTOBACKUP;
+RMAN> ALTER DATABASE MOUNT;
+RMAN> RESTORE DATABASE;
+RMAN> RECOVER DATABASE;
+RMAN> ALTER DATABASE OPEN RESETLOGS;
+```
+
+**3. If Controlfile Autobackup Location Unknown:**
+```bash
+# Search for controlfile autobackup
+RMAN> SET CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '/backup/%F';
+RMAN> RESTORE CONTROLFILE FROM AUTOBACKUP 
+      MAXDAYS 7 
+      MAXSEQ 100;
+```
+
+**4. Rebuild Catalog After Recovery:**
+```sql
+-- Create new catalog
+CREATE USER rman_catalog IDENTIFIED BY password
+  DEFAULT TABLESPACE rman_ts
+  QUOTA UNLIMITED ON rman_ts;
+
+GRANT RECOVERY_CATALOG_OWNER TO rman_catalog;
+
+-- Register database
+RMAN> CONNECT CATALOG rman_catalog/password@catdb
+RMAN> CREATE CATALOG;
+RMAN> CONNECT TARGET /
+RMAN> REGISTER DATABASE;
+
+-- Resync to populate history
+RMAN> RESYNC CATALOG;
+```
+
+**5. Lessons Learned:**
+- Implemented catalog database protection (Data Guard)
+- Configured multiple controlfile autobackup locations
+- Documented all backup locations
+- Increased CONTROL_FILE_RECORD_KEEP_TIME to 30 days
+
+### Question 34: SQL Performance Regression After Upgrade
+**Scenario:** After upgrading from 11g to 19c, multiple critical SQLs are running 10x slower. How do you handle this crisis?
+
+**Answer:**
+Post-upgrade performance issues require systematic approach:
+
+**1. Immediate Stabilization:**
+```sql
+-- Set optimizer to previous version temporarily
+ALTER SYSTEM SET OPTIMIZER_FEATURES_ENABLE='11.2.0.4';
+
+-- For specific sessions only
+ALTER SESSION SET OPTIMIZER_FEATURES_ENABLE='11.2.0.4';
+```
+
+**2. Identify Affected SQLs:**
+```sql
+-- Compare execution plans
+SELECT 
+  sql_id,
+  plan_hash_value,
+  optimizer_mode,
+  optimizer_cost,
+  elapsed_time/executions avg_elapsed
+FROM dba_hist_sqlstat
+WHERE sql_id IN (
+  SELECT DISTINCT sql_id 
+  FROM dba_hist_sqlstat 
+  WHERE elapsed_time/NULLIF(executions,0) > 1000000
+)
+ORDER BY sql_id, snap_id;
+```
+
+**3. Root Cause Analysis:**
+Common causes found:
+- **Adaptive Features:** 
+  ```sql
+  -- Check adaptive plans
+  SELECT sql_id, child_number, is_resolved_adaptive_plan
+  FROM v$sql
+  WHERE is_resolved_adaptive_plan = 'Y';
+  
+  -- Disable if problematic
+  ALTER SYSTEM SET OPTIMIZER_ADAPTIVE_PLANS=FALSE;
+  ```
+
+- **New Optimizer Features:**
+  ```sql
+  -- Check fix controls
+  SELECT bugno, value, description
+  FROM v$system_fix_control
+  WHERE bugno IN (SELECT bugno FROM v$session_fix_control);
+  ```
+
+**4. SQL Plan Management Implementation:**
+```sql
+-- Create baselines for good plans from AWR
+DECLARE
+  l_plans_loaded PLS_INTEGER;
+BEGIN
+  l_plans_loaded := DBMS_SPM.LOAD_PLANS_FROM_AWR(
+    begin_snap => 1234,
+    end_snap => 1235,
+    basic_filter => 'sql_id = ''abc123def456''',
+    fixed => 'YES');
+END;
+```
+
+**5. Long-term Resolution:**
+```sql
+-- Gather fresh statistics with new options
+BEGIN
+  DBMS_STATS.GATHER_DATABASE_STATS(
+    estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE,
+    method_opt => 'FOR ALL COLUMNS SIZE AUTO',
+    degree => DBMS_STATS.AUTO_DEGREE,
+    cascade => TRUE,
+    options => 'GATHER AUTO'
+  );
+END;
+
+-- Set table preferences for problematic tables
+BEGIN
+  DBMS_STATS.SET_TABLE_PREFS('SCHEMA','TABLE','METHOD_OPT',
+    'FOR COLUMNS SIZE 254 COL1, COL2 FOR COLUMNS SIZE 1 COL3');
+END;
+```
+
+### Question 35: Data Guard Lag Troubleshooting
+**Scenario:** Your Data Guard standby is lagging by 6 hours. Transport and apply are both showing as current. How do you troubleshoot?
+
+**Answer:**
+This paradox requires deep investigation:
+
+**1. Verify the Actual Lag:**
+```sql
+-- On Primary
+SELECT THREAD#, MAX(SEQUENCE#) FROM V$ARCHIVED_LOG 
+WHERE ARCHIVED='YES' GROUP BY THREAD#;
+
+-- On Standby
+SELECT THREAD#, MAX(SEQUENCE#) FROM V$ARCHIVED_LOG 
+WHERE APPLIED='YES' GROUP BY THREAD#;
+
+-- Check SCN lag
+SELECT CURRENT_SCN FROM V$DATABASE; -- Run on both
+```
+
+**2. Transport Verification:**
+```sql
+-- On Primary
+SELECT * FROM V$DATAGUARD_STATS;
+SELECT DEST_ID, STATUS, ERROR FROM V$ARCHIVE_DEST_STATUS;
+
+-- Check for gaps
+SELECT * FROM V$ARCHIVE_GAP;
+```
+
+**3. Apply Process Investigation:**
+```sql
+-- On Standby
+SELECT PROCESS, STATUS, THREAD#, SEQUENCE#, BLOCKS 
+FROM V$MANAGED_STANDBY;
+
+-- Check for MRP0 errors
+SELECT MESSAGE FROM V$DATAGUARD_STATUS 
+WHERE SEVERITY IN ('Error','Fatal') 
+ORDER BY TIMESTAMP DESC;
+```
+
+**4. Common Hidden Issues Found:**
+
+**Network Issues:**
+```bash
+# Test actual throughput
+iperf3 -c standby_host -t 60
+
+# Check for packet loss
+ping -s 32768 -c 1000 standby_host
+```
+
+**Standby Redo Log Issues:**
+```sql
+-- Verify standby redo logs
+SELECT GROUP#, THREAD#, SEQUENCE#, BYTES, USED, STATUS 
+FROM V$STANDBY_LOG;
+
+-- Should have n+1 groups per thread
+-- Size should match online redo logs
+```
+
+**5. Resolution Steps:**
+```sql
+-- Found issue: Insufficient standby redo logs causing apply delay
+
+-- Add more standby redo logs
+ALTER DATABASE ADD STANDBY LOGFILE THREAD 1 
+  GROUP 10 SIZE 1G,
+  GROUP 11 SIZE 1G,
+  GROUP 12 SIZE 1G;
+
+-- If apply is stuck, restart
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE CANCEL;
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE 
+  USING CURRENT LOGFILE DISCONNECT;
+
+-- Enable real-time apply
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE 
+  USING CURRENT LOGFILE DISCONNECT FROM SESSION;
+```
+
+### Question 36: Latch Contention Resolution
+**Scenario:** AWR shows high "cache buffers chains" latch contention. How do you diagnose and resolve this?
+
+**Answer:**
+Cache buffers chains latch contention indicates hot blocks:
+
+**1. Identify Hot Blocks:**
+```sql
+-- Find objects with high touch count
+SELECT 
+  o.owner,
+  o.object_name,
+  o.object_type,
+  SUM(tch) touches,
+  COUNT(*) blocks
+FROM x$bh b, dba_objects o
+WHERE b.obj = o.data_object_id
+AND tch > 100
+GROUP BY o.owner, o.object_name, o.object_type
+ORDER BY touches DESC;
+
+-- Find specific hot blocks
+SELECT 
+  file#,
+  dbablk,
+  tch,
+  hladdr
+FROM x$bh
+WHERE tch > 1000
+ORDER BY tch DESC;
+```
+
+**2. Analyze Access Pattern:**
+```sql
+-- Get SQL accessing hot blocks
+SELECT DISTINCT sql_id
+FROM v$sql_plan
+WHERE object_name IN (
+  SELECT object_name 
+  FROM dba_objects 
+  WHERE data_object_id IN (
+    SELECT obj FROM x$bh WHERE tch > 1000
+  )
+);
+
+-- Check for nested loops on hot tables
+SELECT * FROM v$sql_plan
+WHERE sql_id = 'hot_sql_id'
+AND operation LIKE '%NESTED LOOPS%';
+```
+
+**3. Solutions Implemented:**
+
+**a) Reduce Block Temperature:**
+```sql
+-- Increase PCTFREE to spread rows
+ALTER TABLE hot_table PCTFREE 50;
+ALTER TABLE hot_table MOVE;
+ALTER INDEX hot_index REBUILD;
+
+-- Partition hot tables
+ALTER TABLE hot_table MODIFY PARTITION BY HASH(id) PARTITIONS 16;
+```
+
+**b) SQL Tuning:**
+```sql
+-- Convert nested loops to hash joins
+ALTER SESSION SET "_nlj_batching_enabled" = 0;
+
+-- Add result cache for frequently accessed lookup
+ALTER TABLE lookup_table RESULT_CACHE (MODE FORCE);
+```
+
+**c) System-Level Changes:**
+```sql
+-- Increase number of latches (hidden parameter)
+ALTER SYSTEM SET "_db_block_hash_buckets"=1048576 SCOPE=SPFILE;
+-- Requires restart
+
+-- Enable mutex for library cache
+ALTER SYSTEM SET "_kks_use_mutex_pin"=TRUE;
+```
+
+### Question 37: Disaster Recovery Test Failure
+**Scenario:** During a DR test, the standby database fails to open with "ORA-01110: data file X: '/path/datafile.dbf'" even though all files exist. How do you troubleshoot?
+
+**Answer:**
+This typically indicates file header inconsistency:
+
+**1. Diagnostic Steps:**
+```sql
+-- Check file headers
+SELECT file#, status, fuzzy, checkpoint_change#
+FROM v$datafile_header;
+
+-- Compare with controlfile
+SELECT file#, status, checkpoint_change#
+FROM v$datafile;
+
+-- Check for offline files
+SELECT file#, name, status FROM v$datafile WHERE status != 'ONLINE';
+```
+
+**2. Common Issues Found:**
+
+**Missing Datafile Copy:**
+```sql
+-- Verify all files were copied
+SELECT name FROM v$datafile
+MINUS
+SELECT name FROM v$datafile_copy;
+
+-- If missing, catalog it
+RMAN> CATALOG DATAFILECOPY '/path/to/datafile.dbf';
+```
+
+**Fuzzy Datafiles:**
+```sql
+-- Check fuzzy status
+SELECT file#, fuzzy, checkpoint_change# 
+FROM v$datafile_header 
+WHERE fuzzy = 'YES';
+
+-- Need recovery
+RECOVER DATABASE;
+-- or
+RECOVER DATAFILE X;
+```
+
+**3. Resolution Process:**
+```sql
+-- Found issue: Datafile was offline dropped on primary
+
+-- On standby, recreate as unnamed
+ALTER DATABASE CREATE DATAFILE 
+  '/u01/app/oracle/product/19.0.0/db_1/dbs/UNNAMED00015' AS 
+  '/u01/oradata/PROD/users05.dbf';
+
+-- Continue recovery
+ALTER DATABASE RECOVER MANAGED STANDBY DATABASE 
+  USING CURRENT LOGFILE DISCONNECT;
+```
+
+**4. Prevention Measures:**
+- Modified backup scripts to check v$datafile status
+- Added pre-DR test validation script
+- Documented all offline/dropped datafiles
+- Implemented automated DR testing monthly
+
+It looks like the question labeled as **"Question 38: Memory Leak Diagnosis"** in your markdown file is incomplete and cuts off mid-query. Here's a corrected and completed version of that question and answer block:
+
+---
+
+### Question 38: Memory Leak Diagnosis
+
+**Scenario:** PGA usage keeps growing over time, eventually causing ORA-04030 errors. How do you diagnose and fix memory leaks?
+
+**Answer:**  
+Systematic approach to PGA memory leak diagnosis:
+
+**1. Current Memory Analysis:**
+```sql
+-- Overall PGA usage
+SELECT * FROM v$pgastat;
+
+-- Per-process memory usage
+SELECT 
+  pid,
+  spid,
+  program,
+  pga_used_mem/1024/1024 AS pga_used_mb,
+  pga_alloc_mem/1024/1024 AS pga_alloc_mb,
+  pga_max_mem/1024/1024 AS pga_max_mb
+FROM v$process
+ORDER BY pga_alloc_mem DESC;
+```
+
+**2. Historical Trend Analysis:**
+```sql
+-- Use AWR to track PGA usage over time
+SELECT 
+  s.snap_id,
+  s.begin_interval_time,
+  st.value/1024/1024 AS pga_allocated_mb
+FROM dba_hist_pgastat st
+JOIN dba_hist_snapshot s ON st.snap_id = s.snap_id
+WHERE st.name = 'total PGA allocated'
+ORDER BY s.begin_interval_time;
+```
+
+**3. Session-Level Diagnosis:**
+```sql
+-- Identify sessions with high PGA usage
+SELECT 
+  s.sid,
+  s.serial#,
+  pga_used_mem/1024/1024 AS pga_used_mb,
+  pga_alloc_mem/1024/1024 AS pga_alloc_mb,
+  s.program,
+  s.module
+FROM v$session s
+JOIN v$process p ON s.paddr = p.addr
+ORDER BY pga_alloc_mem DESC;
+```
+
+**4. Fixes and Best Practices:**
+- Tune memory parameters: `pga_aggregate_target`, `workarea_size_policy`
+- Identify and fix poorly written PL/SQL or recursive SQL
+- Use `DBMS_SESSION.FREE_UNUSED_USER_MEMORY` in long-running PL/SQL
+- Monitor and kill runaway sessions if necessary
+- Apply patches if memory leaks are due to known Oracle bugs
+
+---
 
 
+  
+  
+  
+  
 
 
