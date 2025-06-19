@@ -1,5 +1,3 @@
-I'll help you create a comprehensive learning plan for Days 1-3 of Week 1, focusing on shell scripting fundamentals with Oracle DBA-specific applications. Let me break this down into daily modules with practical exercises.
-
 ## Day 1: Shell Environment and Basic Commands
 
 ### Morning Session (2-3 hours)
