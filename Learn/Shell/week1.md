@@ -1,4 +1,4 @@
-##Phase 1: Foundation
+##    Phase 1: Foundation
 ## Day 1: Shell Environment and Basic Commands
 
 ### Morning Session (2-3 hours)
