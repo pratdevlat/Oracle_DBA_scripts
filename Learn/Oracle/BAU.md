@@ -1,22 +1,24 @@
-Oracle DBA BAU SQL Scripts Inventory
+# Oracle DBA BAU SQL Scripts Inventory
 
-As an experienced Oracle DBA, you’ll appreciate the value of a well-curated set of SQL scripts for BAU activities. This inventory provides a comprehensive starting point. Always test these scripts in a non-production environment before deploying them to your production systems.
+As an experienced Oracle DBA, you'll appreciate the value of a well-curated set of SQL scripts for BAU activities. This inventory provides a comprehensive starting point. Always test these scripts in a non-production environment before deploying them to your production systems.
 
-Important Considerations Before Use
-	•	Permissions: Ensure the Oracle user executing these scripts has the necessary privileges (SELECT_CATALOG_ROLE, DBA role, specific object privileges).
-	•	Schema: Most scripts query V$ views or DBA_ views.
-	•	Customization: Adjust scripts based on your environment (schema names, tablespace names, retention policies).
-	•	Error Handling: Add error handling and logging for automation.
-	•	Tooling: Consider Oracle Enterprise Manager or third-party tools for advanced monitoring.
+## Important Considerations Before Use
 
-Contents
+* **Permissions**: Ensure the Oracle user executing these scripts has the necessary privileges (`SELECT_CATALOG_ROLE`, DBA role, specific object privileges).
+* **Schema**: Most scripts query V\$ views or DBA\_ views.
+* **Customization**: Adjust scripts based on your environment (schema names, tablespace names, retention policies).
+* **Error Handling**: Add error handling and logging for automation.
+* **Tooling**: Consider Oracle Enterprise Manager or third-party tools for advanced monitoring.
 
-1. Monitoring and Diagnostics
+## Contents
 
-1.1 Database Health Check Script
+### 1. Monitoring and Diagnostics
+
+#### 1.1 Database Health Check Script
 
 This script provides a quick overview of critical database parameters.
 
+```sql
 -- Database Health Check Script
 SET LINESIZE 200
 SET PAGESIZE 50
@@ -46,11 +48,13 @@ FROM V$INSTANCE I, V$DATABASE D;
 SELECT 'Alert Log Location: ' || VALUE AS ALERT_LOG_LOCATION
 FROM V$DIAG_INFO
 WHERE NAME = 'Default Trace File' AND KEY = 'ADR_HOME';
+```
 
-1.2 Long-Running Queries
+#### 1.2 Long-Running Queries
 
 Identifies long-running SQL statements to pinpoint performance bottlenecks.
 
+```sql
 -- Long-Running Queries
 SET LINESIZE 200
 SET PAGESIZE 50
@@ -76,11 +80,13 @@ AND S.STATUS = 'ACTIVE'
 AND S.TYPE = 'USER'
 AND S.LAST_CALL_ET > 300
 ORDER BY LAST_CALL_ET DESC;
+```
 
-1.3 Sessions Causing Blocking
+#### 1.3 Sessions Causing Blocking
 
 Identifies blocking sessions affecting performance.
 
+```sql
 -- Sessions Causing Blocking
 SET LINESIZE 200
 SET PAGESIZE 50
@@ -91,23 +97,27 @@ COLUMN WAIT_EVENT FORMAT A30 HEADING 'WAIT_EVENT'
 COLUMN WAIT_TIME FORMAT 9999999 HEADING 'WAIT_TIME_CS'
 
 -- [Complete SQL as provided]
+```
 
-2. Performance Tuning
+### 2. Performance Tuning
 
-2.1 Identify High Resource-Consuming Queries
+#### 2.1 Identify High Resource-Consuming Queries
 
+```sql
 -- High Resource-Consuming Queries
 SET LINESIZE 200
 SET PAGESIZE 50
 
 -- [Complete SQL as provided]
+```
 
-3. Backup and Recovery
+### 3. Backup and Recovery
 
-3.1 RMAN Backup Scripts
+#### 3.1 RMAN Backup Scripts
 
 Example scripts for RMAN backups and restorations.
 
+```rman
 -- RMAN Full Database Backup
 RUN {
     ALLOCATE CHANNEL d1 TYPE DISK;
@@ -116,55 +126,66 @@ RUN {
     RELEASE CHANNEL d1;
     RELEASE CHANNEL d2;
 }
+```
 
-4. Space Management
+### 4. Space Management
 
-4.4 Tablespace Utilization and Growth Prediction
+#### 4.4 Tablespace Utilization and Growth Prediction
 
 Analyzes current tablespace usage and predicts growth.
 
+```sql
 -- Tablespace Utilization and Growth Prediction
 SET LINESIZE 200
 SET PAGESIZE 50
 
 -- [Complete SQL as provided]
+```
 
-5. Security and Audit
+### 5. Security and Audit
 
-5.1 User Privileges Review
+#### 5.1 User Privileges Review
 
+```sql
 -- User Roles Review
 SET LINESIZE 200
 SET PAGESIZE 50
 
 -- [Complete SQL as provided]
+```
 
-6. High Availability and Standby Management
+### 6. High Availability and Standby Management
 
-6.1 Data Guard Synchronization Checks
+#### 6.1 Data Guard Synchronization Checks
 
 Critical for monitoring Data Guard environment.
 
+```sql
 -- Data Guard Transport Lag and Apply Lag
 SET LINESIZE 200
 SET PAGESIZE 50
 
 -- [Complete SQL as provided]
+```
 
-7. Patching and Upgrades
+### 7. Patching and Upgrades
 
-7.1 Database Version Checks
+#### 7.1 Database Version Checks
 
 Simple database version identification.
 
+```sql
 SELECT VERSION FROM V$INSTANCE;
+```
 
-8. Routine Maintenance
+### 8. Routine Maintenance
 
-8.1 Statistics Gathering Scripts
+#### 8.1 Statistics Gathering Scripts
 
 Manual statistics gathering examples.
 
+```sql
 EXEC DBMS_STATS.GATHER_SCHEMA_STATS(OWNNAME => 'YOUR_SCHEMA_NAME', OPTIONS => 'GATHER AUTO');
+```
 
 Ensure to adjust scripts based on your Oracle environment and compliance requirements.
