@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exadata Chapter 6: Maintenance & Advanced Operations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Tech Blue -->
+    <!-- Application Structure Plan: The SPA is designed with a top-level tabbed navigation, mirroring the structure of the "What I Need to Learn" sections in the report. This allows users to easily navigate between distinct topics such as Patching, Disk Management, or Security. Within each tab, detailed content is presented using collapsible accordion sections for each sub-question, providing progressive disclosure. This structure prevents information overload and enables users to delve into specific areas of interest at their own pace, making complex operational procedures digestible. -->
+    <!-- Visualization & Content Choices:
+    1. Exadata Patching Strategy and Procedures: Goal: Inform, Guide. Method: Textual explanations with emphasis on procedures and command-line examples (e.g., `dbnodeupdate.sh`, `cellcli`).
+    2. Infrastructure vs Database Patch Management: Goal: Inform. Method: Textual explanations differentiating patch types and coordination.
+    3. Cell Disk Health Monitoring and Predictive Failure: Goal: Inform, Guide. Method: Textual explanations and `cellcli` commands for proactive disk monitoring.
+    4. Disk Replacement and Hardware Management: Goal: Guide. Method: Detailed procedural steps and `cellcli`/ASM command examples for disk replacement verification.
+    5. Backup and Recovery Considerations for Exadata: Goal: Inform, Guide. Method: Textual best practices and RMAN conceptual examples.
+    6. Security Hardening and Access Control: Goal: Inform, Guide. Method: Textual best practices and general security considerations.
+    7. Capacity Planning and Storage Management: Goal: Inform, Guide. Method: Textual explanations on monitoring and optimizing storage.
+    8. Performance Baseline Management: Goal: Inform, Guide. Method: Textual explanation of baselining importance.
+    9. Cluster Configuration Management: Goal: Inform, Guide. Method: Textual explanation and dcli example for consistency.
+    10. Advanced Operational Procedures: Goal: Inform, Guide. Method: Textual descriptions of complex operations.
+    11. Disaster Recovery and Business Continuity: Goal: Inform, Guide. Method: Textual considerations for DR.
+    12. Lifecycle Management: Goal: Inform, Guide. Method: Textual overview of upgrade and refresh planning.
+    All choices adhere to the NO SVG/Mermaid constraint and prioritize clarity, practical application (commands), and structured learning for an Oracle DBA.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .accordion-content.active {
+            max-height: 2000px; /* Adjust as needed for content */
+        }
+        code {
+            display: block;
+            background-color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900">Exadata Chapter 6: Maintenance & Advanced Operations</h1>
+            <p class="mt-2 text-lg text-slate-600">Mastering advanced maintenance, patching, capacity planning, and security for production Exadata environments.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6 overflow-x-auto">
+                <nav class="flex flex-nowrap -mb-px" aria-label="Tabs">
+                    <button class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 active" data-tab="patching_strategy">Patching Strategy</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="infra_vs_db_patch">Infra vs DB Patch</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="disk_health">Cell Disk Health</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="disk_replacement">Disk Replacement</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="backup_recovery">Backup & Recovery</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="security_hardening">Security Hardening</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="capacity_planning">Capacity Planning</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="baseline_management">Baseline Management</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cluster_config">Cluster Config</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="advanced_ops">Advanced Operations</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="dr_bc">DR & BC</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="lifecycle_mgmt">Lifecycle Mgmt</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content: Exadata Patching Strategy and Procedures -->
+            <div id="patching_strategy" class="tab-content active">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">1. Exadata Patching Strategy and Procedures</h2>
+                <p class="mb-6 text-slate-600">Patching Exadata is a critical and complex process. Understanding the types of patches, the recommended sequence, and meticulous planning are essential for successful, minimal-downtime maintenance.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is the recommended patching sequence for Exadata environments?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Storage Cells First:** Patch all Exadata Storage Servers (cells) in a rolling fashion.</li>
+                            <li>**Database Servers (Grid Infrastructure/OS):** Patch the Oracle Grid Infrastructure (Clusterware and ASM) and underlying OS on database servers in a rolling fashion.</li>
+                            <li>**Oracle Database Homes:** Patch the Oracle Database software binaries on database servers.</li>
+                            <li>**Database Upgrade (Optional):** If upgrading the database version (e.g., 19c to 21c), this occurs after database home patching.</li>
+                            <li>**Application Patches:** Finally, apply any application-specific patches or upgrades.</li>
+                        </ol>
+                        <p class="mt-4 text-slate-700">This sequence minimizes downtime by allowing the database instances to failover between nodes during rolling updates.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I plan and schedule Exadata patching with minimal downtime?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Review MOS Notes:** Always consult the Master Note for Exadata patching (typically Doc ID 888828.1 on My Oracle Support) for the latest recommendations and known issues.</li>
+                            <li>**Test Thoroughly:** Perform patch dry runs and full patch application in a non-production environment (Dev/UAT) that mirrors production as closely as possible.</li>
+                            <li>**Schedule During Low Activity:** Patching phases, especially those involving restarts, should be scheduled during periods of low database workload.</li>
+                            <li>**Leverage Rolling Updates:** Exadata is designed for rolling patches, allowing one node/cell to be updated at a time while others remain active.</li>
+                            <li>**Communication:** Communicate outage windows and progress clearly with application teams and stakeholders.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I patch storage cells vs database servers?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Patching involves specific utilities:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**Storage Cells:** Use the `patchmgr` utility (part of the Exadata software). You provide `patchmgr` with a list of cells, the patch location, and it performs a rolling update, automatically restarting `cellsrv` on each cell.</li>
+                            <li>**Database Servers (OS/GI):** Use `dbnodeupdate.sh` (also part of Exadata software). This utility handles OS and Grid Infrastructure patching in a rolling manner, moving the database instances and applying updates to one node at a time.</li>
+                        </ul>
+                        <pre><code>-- Example for patching storage cells with patchmgr (as root on control server)
+/opt/oracle.patch/patchmgr -cells &lt;cell_list_file&gt; -patch &lt;patch_dir&gt; -target_version &lt;version&gt; -rolling
+
+-- Example for patching database servers with dbnodeupdate.sh (as root on node to be patched)
+dbnodeupdate.sh -u -l &lt;patch_location&gt;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `patchmgr` orchestrates the rolling patch of storage cells, handling service restarts automatically. `dbnodeupdate.sh` updates the OS and Grid Infrastructure on database nodes. The `-u` flag for `dbnodeupdate.sh` indicates an update operation, and `-l` specifies the patch location. These utilities are key to Exadata's engineered system approach to patching.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I verify patch installation success across the cluster?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`imageinfo -ver`:** Run this on all database and storage nodes using `dcli` (Chapter 4) to confirm the new software version is installed.</li>
+                            <li>**`opatch lsinventory -detail`:** For Oracle Database and Grid Infrastructure homes, verify applied patches.</li>
+                            <li>**`crsctl stat res -t`:** Check Oracle Clusterware resources on database servers.</li>
+                            <li>**`cellcli -e list cell detail | grep cellServicesStatus`:** Confirm cell services are running.</li>
+                            <li>**AWR Reports:** Generate AWRs before and after to compare key performance metrics and confirm no regressions.</li>
+                        </ul>
+                        <pre><code>-- Verify image version across all database servers
+dcli -g dbs_group -l root 'imageinfo -ver'
+
+-- Verify image version across all storage cells
+dcli -g cell_group -l root 'imageinfo -ver'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These `dcli` commands allow you to quickly verify the Exadata software version on all nodes, ensuring the patch has been uniformly applied. This is a critical post-patching verification step.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Infrastructure vs Database Patch Management -->
+            <div id="infra_vs_db_patch" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">2. Infrastructure vs Database Patch Management</h2>
+                <p class="mb-6 text-slate-600">Distinguishing between infrastructure and database patches and understanding their coordination is fundamental to effective Exadata patch management.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        When do I need infrastructure patches vs database patches?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Infrastructure Patches:** These update the underlying Exadata software on both database servers (OS, Clusterware) and storage cells (`cellsrv`, `ms`, `rs`). They typically include bug fixes, security updates, and performance enhancements for the Exadata-specific features (Smart Scan, Flash Cache, IORM, etc.). They are delivered as Exadata Quarterly Full Stack Patches (QFSP) or one-off patches.</li>
+                            <li>**Database Patches:** These update the Oracle Database software (RDBMS binaries). They include fixes, security updates, and new features for the database itself. They are typically applied using `opatch`.</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">It's common to apply both types of patches during a maintenance window to keep the entire Exadata stack current.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I coordinate patching between storage and compute layers?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Coordination is managed by the recommended patching sequence (Storage Cells first, then Database Servers). The `patchmgr` and `dbnodeupdate.sh` utilities are designed to interact correctly with the running database and ASM instances to enable rolling upgrades.</p>
+                        <p class="mt-2 text-slate-700">For example, `dbnodeupdate.sh` will gracefully relocate database instances and ASM services from a node before patching it, ensuring the database remains available on other nodes during the process.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Cell Disk Health Monitoring and Predictive Failure -->
+            <div id="disk_health" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">3. Cell Disk Health Monitoring and Predictive Failure</h2>
+                <p class="mb-6 text-slate-600">Proactive monitoring of cell disk health is critical to intercept potential failures before they impact performance or data availability, leveraging Exadata's predictive capabilities.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I implement proactive monitoring for disk health?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Automated Alerts:** Configure automated alerts from `cellcli` (as seen in Chapter 4/5) and integrate them with your monitoring system (e.g., Enterprise Manager, SNMP, custom scripts).</li>
+                            <li>**ExaWatcher:** Regularly review ExaWatcher data (especially `iostat` and physical disk metrics) for trends indicating performance degradation or increasing errors on specific disks.</li>
+                            <li>**AWR Reports:** Check for high `cell physical IO errors` or `disk_read_io_errs_per_sec` from `V$CELL_IO_METRIC`.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What metrics indicate potential disk failures before they occur?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`errorCount`:** Increasing values for `errorCount` attribute of `physicaldisk` objects in `cellcli`.</li>
+                            <li>**`predictedFailure`:** A `physicaldisk` status of `predictedFailure` (Exadata's built-in predictive analysis).</li>
+                            <li>**High latency/low throughput:** For a specific disk, compared to others of the same type in the same cell.</li>
+                            <li>**SMART errors:** While not directly exposed in `cellcli`, underlying SMART errors can lead to `predictedFailure` status.</li>
+                        </ul>
+                        <pre><code>-- On a storage cell, list physical disks and their error counts
+cellcli -e list physicaldisk attributes name, status, errorCount, predictedFailure
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command is crucial for predictive failure analysis. Regularly checking `errorCount` (non-zero or increasing) and the `predictedFailure` status directly from `cellcli` allows you to proactively address disks before they fully fail.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I set up automated alerts for disk health issues?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Exadata includes predefined alert definitions. You can configure them to send notifications.</p>
+                        <pre><code>-- List existing alert definitions
+cellcli -e list alertdefinition
+
+-- Example: Alter an alert definition to send SNMP traps (if SNMP is configured)
+cellcli -e alter alertdefinition &lt;alert_name&gt; notificationMethod=SNMP
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `list alertdefinition` shows all predefined hardware and software alerts. You can modify their notification methods (e.g., `SNMP`, `EMAIL`) to integrate with your monitoring system.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Disk Replacement and Hardware Management -->
+            <div id="disk_replacement" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">4. Disk Replacement and Hardware Management</h2>
+                <p class="mb-6 text-slate-600">Replacing failed disks is a common hardware maintenance task on Exadata. Understanding the complete procedure, including verification and impact, ensures a smooth recovery.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is the complete procedure for replacing failed disks?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Identify Failed Disk:** Use `cellcli list physicaldisk` and `V$ASM_DISK` (Chapter 5).</li>
+                            <li>**Verify ASM Redundancy:** Ensure the disk group is fully redundant before replacement to avoid data loss.</li>
+                            <li>**Offline Disk (if not already):** ASM usually handles this. Manually if needed: `ALTER DISKGROUP DATA OFFLINE DISK 'DATA_00_cell01';` (from DB server).</li>
+                            <li>**Locate Disk:** Identify the physical disk slot on the Exadata cell.</li>
+                            <li>**Remove Failed Disk:** Physically pull the failed disk drive.</li>
+                            <li>**Insert New Disk:** Insert the new, certified replacement disk.</li>
+                            <li>**Verify New Disk:** `cellcli list physicaldisk` should show `status: active` or `status: new` (depending on Exadata version).</li>
+                            <li>**Add Disk to ASM:** ASM typically discovers and adds the new disk automatically. If not, `ALTER DISKGROUP DATA ADD DISK 'path_to_new_disk';` (from DB server).</li>
+                            <li>**Monitor Rebalance:** `V$ASM_OPERATION` to track the rebalance progress (Chapter 5).</li>
+                            <li>**Clear Alerts:** `cellcli -e drop alert where alertid='&lt;alert_ID&gt;'` (Chapter 4).</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What verification steps are required after disk replacement?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`cellcli list physicaldisk`:** Confirm new disk is `active` and `errorCount` is 0.</li>
+                            <li>**`V$ASM_DISK` and `V$ASM_DISKGROUP`:** Confirm disk is `ONLINE` and disk group is `NORMAL` (or rebalancing).</li>
+                            <li>**`V$ASM_OPERATION`:** Monitor rebalance completion.</li>
+                            <li>**Database Alert Log:** Check for any errors during the rebalance.</li>
+                            <li>**Clear Alerts:** Ensure all disk-related alerts are cleared in `cellcli`.</li>
+                            <li>**ExaWatcher:** Review ExaWatcher data to confirm I/O performance has returned to normal.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What impact does disk replacement have on database performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">During disk replacement, ASM will perform a rebalance operation to copy data from the remaining redundant copies to the new disk. This rebalance consumes I/O and CPU resources, leading to a temporary, minor performance impact on the database, especially for high-activity systems. The extent of impact depends on the rebalance power (adjustable in ASM) and overall system load.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Backup and Recovery Considerations for Exadata -->
+            <div id="backup_recovery" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">5. Backup and Recovery Considerations for Exadata</h2>
+                <p class="mb-6 text-slate-600">While Exadata is highly available, robust backup and recovery strategies are paramount. Understanding how RMAN leverages Exadata features for optimized performance and disaster recovery is key.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do backup strategies differ on Exadata vs traditional systems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Smart Scan for Backup:** RMAN on Exadata can use Smart Scan for backup operations. This means data can be filtered and processed by storage cells before being sent over InfiniBand to the database server for backup, reducing I/O and CPU on the database server.</li>
+                            <li>**Faster Throughput:** The high-speed InfiniBand and powerful storage cells allow for significantly faster backup and restore throughput compared to traditional systems.</li>
+                            <li>**Integration with ZFS/Storage Appliance:** Exadata often integrates with ZFS Storage Appliance for highly efficient RMAN backups (Hybrid Columnar Compression, deduplication, etc.).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the best practices for RMAN configuration on Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Leverage Parallelism:** Use multiple RMAN channels (`ALLOCATE CHANNEL ... TYPE DISK/SBT PARALLELISM N`).</li>
+                            <li>**`BACKUP OPTIMIZATION`:** Enable `BACKUP OPTIMIZATION` in RMAN to skip backing up identical blocks.</li>
+                            <li>**`BLOCK CHANGE TRACKING`:** Enable `BLOCK CHANGE TRACKING` for faster incremental backups.</li>
+                            <li>**Flash Recovery Area (FRA):** Configure a sufficiently sized FRA within ASM.</li>
+                            <li>**Offload to ZFS/Tape:** For long-term backups, offload to dedicated backup appliances (e.g., ZFS Storage Appliance) or tape libraries.</li>
+                        </ul>
+                        <pre><code>-- Example RMAN script snippet for Exadata backup
+RUN {
+  ALLOCATE CHANNEL c1 DEVICE TYPE DISK;
+  ALLOCATE CHANNEL c2 DEVICE TYPE DISK;
+  ALLOCATE CHANNEL c3 DEVICE TYPE DISK;
+  BACKUP DATABASE PLUS ARCHIVELOG;
+  RELEASE CHANNEL c1;
+  RELEASE CHANNEL c2;
+  RELEASE CHANNEL c3;
+}
+-- (More channels for larger systems)
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** Allocating multiple RMAN channels allows backup operations to run in parallel, fully utilizing Exadata's I/O capabilities for faster backups.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Security Hardening and Access Control -->
+            <div id="security_hardening" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">6. Security Hardening and Access Control</h2>
+                <p class="mb-6 text-slate-600">Securing Exadata environments requires a multi-layered approach, covering operating systems, networks, database, and specific Exadata components to protect sensitive data and operations.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the security best practices specific to Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Secure Configuration:** Implement the Exadata Security Checklist from Oracle Support.</li>
+                            <li>**Least Privilege:** Restrict user access to database servers and storage cells to only necessary accounts and privileges.</li>
+                            <li>**SSH Key Management:** Use SSH keys for authentication, disable password authentication where possible. Rotate keys regularly.</li>
+                            <li>**Network Segmentation:** Isolate Exadata InfiniBand and management networks from public access.</li>
+                            <li>**Firewall Rules:** Configure appropriate firewall rules on database servers and cells.</li>
+                            <li>**Auditing:** Enable comprehensive auditing for administrative actions on both database and cell layers.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I secure access to storage cells and management interfaces?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`celladmin` user:** This is the primary administrative user for storage cells. Ensure it has a strong, frequently rotated password, or use SSH keys.</li>
+                            <li>**Restrict SSH access:** Limit SSH access to storage cells to only authorized IPs or jump servers.</li>
+                            <li>**IPMI/KVM:** Secure physical access and network access to IPMI/KVM interfaces, as they provide low-level control.</li>
+                            <li>**Management Network:** Ensure the management Ethernet network is isolated and protected by firewalls.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I secure sensitive data on Exadata storage?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Transparent Data Encryption (TDE):** Encrypt sensitive data at rest using Oracle TDE. This ensures data is encrypted before it's written to storage cells.</li>
+                            <li>**Exadata Storage Server Software (Cell Services):** Cell services do not expose raw data directly, only processed blocks. TDE provides the strongest encryption.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Capacity Planning and Storage Management -->
+            <div id="capacity_planning" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">7. Capacity Planning and Storage Management</h2>
+                <p class="mb-6 text-slate-600">Effective capacity planning on Exadata ensures that you have sufficient resources to meet current and future workload demands, balancing performance and cost.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor and plan for storage capacity growth?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**ASM Disk Group Usage:** Monitor `V$ASM_DISKGROUP` (Chapter 2) for `free_mb` and `total_mb`.</li>
+                            <li>**ExaWatcher:** Analyze historical trends of disk group usage in ExaWatcher reports to project future needs.</li>
+                            <li>**HCC Impact:** Factor in the significant storage savings from HCC when calculating effective capacity.</li>
+                        </ul>
+                        <pre><code>-- Check ASM disk group usage (from DB server)
+SELECT name, total_mb, free_mb, (free_mb/total_mb)*100 AS free_percent
+FROM V$ASM_DISKGROUP;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This SQL query provides a direct view of the allocated and free space within your ASM disk groups, which directly map to the grid disks on your Exadata storage cells. Monitoring `free_percent` helps in capacity planning.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I optimize storage usage with HCC and other features?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Hybrid Columnar Compression (HCC):** Apply appropriate HCC levels (`FOR QUERY`, `FOR ARCHIVE`) to large, static, or infrequently updated tables. This is the primary way to maximize storage efficiency on Exadata.</li>
+                            <li>**Table Partitioning:** Can facilitate data lifecycle management, allowing older, less frequently accessed partitions to be compressed with higher HCC levels.</li>
+                            <li>**Flash Cache/Log:** While not directly reducing storage usage, they optimize I/O, allowing more data to reside on cheaper HDDs without performance penalty for hot data.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Performance Baseline Management -->
+            <div id="baseline_management" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">8. Performance Baseline Management</h2>
+                <p class="mb-6 text-slate-600">Establishing and continuously managing performance baselines is foundational for detecting performance regressions and validating the impact of any changes made to the Exadata system.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I establish performance baselines for Exadata systems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Identify Peak & Off-Peak Workloads:** Collect AWR snapshots and ExaWatcher data during typical peak and quiet periods.</li>
+                            <li>**Key Metrics:** Focus on CPU utilization (DB and Cell), I/O throughput (MB/s, IOPS), latency, Smart Scan offload efficiency, Flash Cache hit ratio, top wait events, and critical business transaction response times.</li>
+                            <li>**Tools:** Use AWR Baselines, Enterprise Manager (if applicable), and ExaWatcher's historical reporting.</li>
+                        </ul>
+                        <pre><code>-- Create an AWR baseline for a specific time range (from SQL*Plus on DB server)
+BEGIN
+  DBMS_WORKLOAD_REPOSITORY.CREATE_BASELINE (
+    start_snap_id => &amp;start_snap_id,
+    end_snap_id   => &amp;end_snap_id,
+    baseline_name => 'My_Peak_Baseline');
+END;
+/
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This PL/SQL block creates a named AWR baseline from existing snapshots. This baseline can then be used to compare future performance against a known good period, quickly identifying deviations.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I detect performance regression over time?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**AWR Compare Reports:** Generate AWR Compare Period reports between current poor performance and a good baseline.</li>
+                            <li>**Automated Monitoring:** Configure alerts in Enterprise Manager or custom scripts to trigger when key metrics deviate from baselines.</li>
+                            <li>**ExaWatcher Trend Analysis:** Visually inspect ExaWatcher charts for unusual spikes or drops in performance metrics.</li>
+                        </ul>
+                        <pre><code>-- Generate AWR Compare Period Report (from SQL*Plus on DB server)
+@$ORACLE_HOME/rdbms/admin/awrgrpt.sql  -- (for text report)
+-- Or use Enterprise Manager for graphical reports
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** The `awrgrpt.sql` script generates a comprehensive text report comparing performance metrics between two AWR snapshots or baselines, highlighting significant changes in wait events, I/O, CPU, and top SQL.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Cluster Configuration Management -->
+            <div id="cluster_config" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">9. Cluster Configuration Management</h2>
+                <p class="mb-6 text-slate-600">Maintaining configuration consistency across all Exadata nodes is crucial for stability, performance, and successful patching. Unmanaged configuration drift can lead to unpredictable behavior.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I manage configuration consistency across cluster nodes?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Use `dcli`:** For applying identical configuration changes or verifying settings across all database servers or storage cells simultaneously.</li>
+                            <li>**Standardized Scripts:** Develop and use standardized shell scripts or automation tools for any manual configuration tasks.</li>
+                            <li>**Centralized Configuration Management:** For larger environments, consider using configuration management tools (e.g., Ansible, Puppet) to enforce desired states.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What configuration files and settings should I monitor?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`/etc/sysconfig/network-scripts/ifcfg-*`:** Network interface configurations.</li>
+                            <li>**`/etc/hosts`:** Hostname mappings.</li>
+                            <li>**`/etc/fstab`:** Filesystem mounts.</li>
+                            <li>**`sysctl.conf`:** Kernel parameters.</li>
+                            <li>**`/etc/security/limits.conf`:** OS user limits.</li>
+                            <li>**`init.ora` / `spfile` parameters:** Database instance configurations.</li>
+                            <li>**ASM parameters:** For ASM instance configuration.</li>
+                            <li>**`cellcli` configurations:** IORM plans, Flash Cache settings.</li>
+                        </ul>
+                        <pre><code>-- Example: Check sysctl settings across all DB nodes (as root)
+dcli -g dbs_group -l root 'sysctl -a | grep kernel.shmmax'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This `dcli` command quickly verifies a specific kernel parameter (`kernel.shmmax`) across all database servers, ensuring consistency of critical OS settings.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Advanced Operational Procedures -->
+            <div id="advanced_ops" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">10. Advanced Operational Procedures</h2>
+                <p class="mb-6 text-slate-600">Beyond routine administration, Exadata requires expertise in advanced operational procedures, such as rolling maintenance and node management, to ensure high availability during changes.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I safely perform rolling maintenance operations?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**One Node/Cell at a Time:** Always perform maintenance on one node/cell at a time to maintain cluster availability.</li>
+                            <li>**Drain Workload:** For database servers, gracefully stop applications connecting to the node being maintained and/or relocate database instances before taking the node down.</li>
+                            <li>**Verify Health:** After maintenance on a node/cell, fully verify its health and integration into the cluster before moving to the next.</li>
+                            <li>**Use Oracle-Provided Tools:** Leverage `dbnodeupdate.sh` and `patchmgr` as they are designed for rolling updates.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What procedures are required for adding or removing cluster nodes?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">These are complex procedures, typically involving Oracle Support and using `dbnodeadd.sh`, `dbnodedelete.sh`, and `cellcli` operations to configure/deconfigure storage.</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**Adding a node:** Involves cabling, configuring InfiniBand, installing OS and Grid Infrastructure, extending ASM disk groups to the new node's grid disks, and adding database instances.</li>
+                            <li>**Removing a node:** Involves gracefully removing database instances and ASM instances, detaching the node from Clusterware, and potentially dropping grid disks from the ASM disk groups if the storage is also being removed.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Disaster Recovery and Business Continuity -->
+            <div id="dr_bc" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">11. Disaster Recovery and Business Continuity</h2>
+                <p class="mb-6 text-slate-600">Comprehensive disaster recovery (DR) planning is essential for critical Exadata workloads. This involves strategies for data replication and rapid recovery in the event of a site-wide outage.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I implement comprehensive disaster recovery for Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Oracle Data Guard:** The primary solution for Exadata DR. It provides physical standby databases (or logical standbys) at a remote site, kept in sync via redo transport.</li>
+                            <li>**Active Data Guard:** For zero data loss and read-only access on the standby during normal operations.</li>
+                            <li>**Far Sync:** For zero data loss over long distances (high latency links).</li>
+                            <li>**Cross-site InfiniBand (Exadata to Exadata):** While data replication occurs at the database layer (Data Guard), InfiniBand is still central to the performance within each Exadata rack. For a remote DR site, you'd have another Exadata machine.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I test disaster recovery procedures safely?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Regular DR Drills:** Conduct planned DR drills regularly (e.g., annually) to test the failover and switchover procedures.</li>
+                            <li>**Snapshot Standby:** Use `SNAPSHOT STANDBY` (Data Guard feature) to create a temporary, updatable copy of the standby database for testing without impacting replication to the primary.</li>
+                            <li>**Test Environment:** Have a dedicated test Exadata environment or partial rack for practicing complex DR scenarios.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Lifecycle Management -->
+            <div id="lifecycle_mgmt" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">12. Lifecycle Management</h2>
+                <p class="mb-6 text-slate-600">Managing the full lifecycle of your Exadata machine, from initial deployment through upgrades and eventual refresh, is crucial for long-term operational success and maximizing your investment.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I plan for Exadata hardware refresh and upgrades?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Version Compatibility:** Understand the compatibility matrix between different Exadata hardware generations and Oracle Database versions.</li>
+                            <li>**Capacity Assessment:** Evaluate current and projected workload growth to determine the target Exadata model (e.g., X8M to X10M).</li>
+                            <li>**Migration Strategy:** Plan the migration method (e.g., `RMAN DUPLICATE`, Data Guard switchover, GoldenGate, Transportable Tablespaces).</li>
+                            <li>**Phased Rollout:** For significant upgrades or refreshes, consider a phased approach (e.g., new Exadata rack alongside old, migrate workloads in phases).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I minimize business impact during major upgrades?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Rolling Upgrades:** For in-place upgrades (e.g., software version within the same hardware), leverage rolling upgrades as much as possible.</li>
+                            <li>**Data Guard / GoldenGate:** For hardware refreshes (moving to a new rack), use Data Guard or GoldenGate to minimize downtime during data migration and cutover.</li>
+                            <li>**Comprehensive Testing:** Thoroughly test the upgraded system with representative workloads before go-live.</li>
+                            <li>**Detailed Runbook:** Develop a step-by-step runbook with clear rollback procedures.</li>
+                            <li>**Communicate:** Keep business stakeholders informed of all planned outages and progress.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTabId = button.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === targetTabId) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        });
+    });
+
+    // Set initial active tab
+    document.querySelector('.tab-button[data-tab="patching_strategy"]').click();
+
+    // Accordion functionality
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('span');
+            
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>

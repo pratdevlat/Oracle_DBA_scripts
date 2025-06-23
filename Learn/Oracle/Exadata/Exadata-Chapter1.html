@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exadata Chapter 1: Interactive Architecture Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Tech Blue -->
+    <!-- Application Structure Plan: The SPA is designed with a top-level tabbed navigation corresponding to the major sections of the source report (Architecture, Database Servers, Storage Servers, etc.). This provides a clear, high-level map of the content and allows the user to either follow the learning path sequentially or jump to a specific topic. Within each tab, content is organized into collapsible accordions for each sub-question. This progressive disclosure approach prevents overwhelming the user with information, making the content more digestible. This structure was chosen because it mirrors a logical learning curriculum, is intuitive for a technical audience, and allows for both guided and self-directed exploration. -->
+    <!-- Visualization & Content Choices:
+    1. Architecture Overview: Goal: Compare. Method: A Chart.js bar chart visually contrasts the "Data over Network" and "DB Server CPU Load" for Traditional vs. Exadata systems, providing a quick, impactful understanding of the core benefit.
+    2. Communication Flow: Goal: Organize, Compare. Method: A side-by-side, step-by-step diagram built with HTML/CSS to illustrate the flow of a SQL query. An interactive button allows toggling between the Traditional and Exadata flows. This direct comparison is highly effective for someone familiar with the traditional method.
+    3. Component Interaction: Goal: Organize. Method: A simple HTML/CSS diagram shows the relationship between Database Servers, InfiniBand, and Storage Servers.
+    4. Commands: Goal: Inform. Method: Styled <pre><code> blocks with clear explanations.
+    All choices adhere to the NO SVG/Mermaid constraint and prioritize clarity and educational impact for a technical user.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .accordion-content.active {
+            max-height: 2000px; /* Adjust as needed */
+        }
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .flow-box {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            width: 90%;
+            max-width: 300px;
+        }
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: #9ca3af;
+            transform: rotate(90deg);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900">Exadata Chapter 1: Interactive Architecture Guide</h1>
+            <p class="mt-2 text-lg text-slate-600">An interactive guide for Oracle DBAs new to Exadata.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6">
+                <nav class="flex flex-wrap -mb-px" aria-label="Tabs">
+                    <button class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 active" data-tab="overview">Architecture Overview</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="dbservers">Database Servers</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="storageservers">Storage Servers</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="infiniband">InfiniBand Network</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="flow">Communication Flow</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="hardware">Hardware</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content -->
+            <div id="overview" class="tab-content active">
+                 <h2 class="text-2xl font-semibold mb-4 text-slate-800">1. Exadata Machine Architecture Overview</h2>
+                 <p class="mb-6 text-slate-600">This section provides a high-level view of an Exadata machine's core components and a comparison to traditional systems. The primary takeaway is the performance gain from intelligent storage offloading, which is visualized in the chart below.</p>
+                
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the main components of an Exadata Database Machine?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">An Exadata Database Machine fundamentally consists of three main types of components:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li><strong>Database Servers (Compute Nodes):</strong> Standard servers where the Oracle Database software runs. They handle SQL processing and instance management.</li>
+                            <li><strong>Storage Servers (Storage Cells):</strong> Specialized servers running Exadata Storage Server Software. They store data and intelligently offload I/O operations.</li>
+                            <li><strong>InfiniBand Network:</strong> A high-speed, low-latency network connecting the Database and Storage Servers, forming the system's backbone.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How does this differ from traditional Oracle RAC setups?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Exadata enhances the traditional RAC concept in three key ways: intelligent storage, a unified high-speed network, and tight hardware-software integration.</p>
+                        <div class="chart-container my-4">
+                            <canvas id="exadataVsTraditionalChart"></canvas>
+                        </div>
+                        <p class="text-center text-sm text-slate-500 italic">This chart conceptually illustrates the primary benefit: Exadata significantly reduces both network traffic and the processing load on the database server compared to traditional architectures.</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <div id="dbservers" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">2. Database Servers (Compute Nodes)</h2>
+                <p class="mb-6 text-slate-600">The Database Servers, or Compute Nodes, are the "brains" of the operation where the Oracle Database instances live. This section details their software components, communication methods, and key differences from standard servers.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What software components run on compute nodes?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li><strong>Oracle Linux:</strong> The underlying operating system.</li>
+                            <li><strong>Oracle Database Software:</strong> The full RDBMS, including instances, background processes, and user processes.</li>
+                            <li><strong>Oracle Clusterware (Grid Infrastructure):</strong> Manages the RAC cluster and includes ASM for storage management.</li>
+                        </ul>
+                        <div class="mt-4">
+                             <h4 class="font-semibold text-slate-800 mb-2">Command Example (on Database Server):</h4>
+                            <p class="text-slate-600 mb-2">To check the status of the ASM disk groups that are built upon the grid disks from the storage cells:</p>
+                            <pre class="bg-slate-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code>-- Connect to ASM instance (sqlplus / as sysasm)
+SELECT name, state, type, total_mb, free_mb FROM v$asm_diskgroup;</code></pre>
+                            <p class="mt-2 text-sm text-slate-600 italic"><strong>Explanation:</strong> This SQL query shows how the Database Server's ASM instance perceives the storage provided by the Exadata cells. It's crucial for monitoring storage capacity and health from the database tier.</p>
+                        </div>
+                    </div>
+                </div>
+                 <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do multiple database servers communicate?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                         <p class="mt-4 text-slate-700">Communication is primarily over the InfiniBand network for performance-critical tasks:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li><strong>Cache Fusion:</strong> Inter-instance block transfers for RAC use InfiniBand with RDMA for extreme speed.</li>
+                             <li><strong>Inter-process Communication:</strong> General cluster heartbeats and resource management also use InfiniBand.</li>
+                             <li><strong>Client Connections:</strong> A separate public Ethernet network is used for client connections (SQL*Net) and administrative access.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div id="storageservers" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">3. Storage Servers (Storage Cells)</h2>
+                <p class="mb-6 text-slate-600">The Storage Servers, or Cells, are the "muscle" of Exadata, providing intelligent, database-aware storage. This is where features like Smart Scan, Flash Cache, and I/O offloading are executed.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                       How do Storage Servers differ from traditional storage systems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">The key difference is intelligence. Traditional storage is "dumb" and only serves blocks. Exadata Storage Servers run the Exadata Storage Server Software (`cellsrv`), which understands SQL and can perform filtering and projection *before* sending data, drastically reducing I/O.</p>
+                    </div>
+                </div>
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                       What services run on storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li><strong>cellsrv (Cell Server):</strong> The main engine. Manages storage, handles I/O requests, and performs Smart Scan processing.</li>
+                            <li><strong>ms (Management Server):</strong> Handles administrative commands from `cellcli`.</li>
+                            <li><strong>rs (Restart Server):</strong> Monitors and ensures the high availability of `cellsrv` and `ms`.</li>
+                        </ul>
+                         <div class="mt-4 space-y-4">
+                             <h4 class="font-semibold text-slate-800 mb-2">Command Examples (on Storage Server):</h4>
+                            <div>
+                                <p class="text-slate-600 mb-2">To check if the core cell services are running:</p>
+                                <pre class="bg-slate-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code>cellcli -e list cell detail | grep cellServicesStatus</code></pre>
+                                <p class="mt-2 text-sm text-slate-600 italic"><strong>Explanation:</strong> `cellcli` is the command-line interface for managing a storage cell. This command verifies that the essential software components (`cellsrv`, `ms`, `rs`) are healthy.</p>
+                            </div>
+                            <div>
+                                <p class="text-slate-600 mb-2">To list the logical grid disks presented to ASM:</p>
+                                <pre class="bg-slate-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code>cellcli -e list griddisk</code></pre>
+                                <p class="mt-2 text-sm text-slate-600 italic"><strong>Explanation:</strong> This shows the logical storage units carved out from physical disks that are made available to the database servers for building ASM disk groups.</p>
+                            </div>
+                             <div>
+                                <p class="text-slate-600 mb-2">To check the status of the physical drives:</p>
+                                <pre class="bg-slate-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code>cellcli -e list physicaldisk</code></pre>
+                                <p class="mt-2 text-sm text-slate-600 italic"><strong>Explanation:</strong> This command is used for monitoring the health of the underlying hardware (HDDs, Flash/NVMe drives) within the cell.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="infiniband" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">4. InfiniBand Network</h2>
+                <p class="mb-6 text-slate-600">The InfiniBand network is the high-speed fabric that connects all components within Exadata. Its low latency and high bandwidth are critical for achieving top performance.</p>
+                 <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                       Why InfiniBand instead of Ethernet?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                         <p class="mt-4 text-slate-700">InfiniBand is chosen for three main reasons:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                             <li><strong>Lower Latency:</strong> Significantly faster than standard Ethernet.</li>
+                             <li><strong>Higher Bandwidth:</strong> Provides massive throughput for large data transfers.</li>
+                             <li><strong>RDMA (Remote Direct Memory Access):</strong> Allows direct memory-to-memory data transfer between servers, bypassing the OS network stack and reducing CPU overhead.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                       How do compute nodes communicate with storage cells over InfiniBand?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">They use a specialized protocol called **iDB (intelligent Database) protocol**, which runs over InfiniBand. This protocol allows the database to send "smart" requests (including SQL predicates) to the `cellsrv` process on the storage cells. It is not a standard filesystem or block device protocol.</p>
+                         <div class="mt-4 space-y-4">
+                             <h4 class="font-semibold text-slate-800 mb-2">Command Examples (on Database Server):</h4>
+                            <div>
+                                <p class="text-slate-600 mb-2">To check the status of the InfiniBand card and ports (run as root):</p>
+                                <pre class="bg-slate-800 text-white p-4 rounded-md text-sm overflow-x-auto"><code>ibstatus</code></pre>
+                                <p class="mt-2 text-sm text-slate-600 italic"><strong>Explanation:</strong> This is a fundamental check to ensure the InfiniBand hardware is physically up and the link is active on a database server.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="flow" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">5. Communication Flow</h2>
+                <p class="mb-6 text-slate-600">Understanding how a SQL query is executed reveals the power of Exadata's architecture. Use the button below to toggle between the traditional I/O path and the optimized Exadata Smart Scan flow.</p>
+
+                <div class="text-center mb-6">
+                    <button id="flowToggleButton" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Show Exadata Smart Scan Flow</button>
+                </div>
+
+                <div id="traditionalFlow" class="p-4 border border-slate-200 rounded-lg">
+                    <h3 class="text-xl font-bold text-center mb-4 text-slate-700">Traditional I/O Flow</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-box"><strong>1. DB Server</strong><br>Requests ALL data blocks</div>
+                        <div class="flow-arrow">&#11015;</div>
+                        <div class="flow-box"><strong>2. Network</strong><br>ALL data blocks transferred</div>
+                        <div class="flow-arrow">&#11015;</div>
+                        <div class="flow-box"><strong>3. "Dumb" Storage</strong><br>Returns ALL data blocks</div>
+                        <div class="flow-arrow">&#11013;</div>
+                        <div class="flow-box"><strong>4. DB Server CPU</strong><br>Filters data AFTER receiving it</div>
+                    </div>
+                </div>
+
+                <div id="exadataFlow" class="hidden p-4 border border-blue-300 bg-blue-50 rounded-lg">
+                    <h3 class="text-xl font-bold text-center mb-4 text-blue-700">Exadata Smart Scan Flow</h3>
+                     <div class="flow-diagram">
+                        <div class="flow-box"><strong>1. DB Server</strong><br>Sends "smart" request with filters</div>
+                        <div class="flow-arrow">&#11015;</div>
+                        <div class="flow-box"><strong>2. InfiniBand Network</strong><br>Lightweight request transferred</div>
+                        <div class="flow-arrow">&#11015;</div>
+                        <div class="flow-box border-blue-500"><strong>3. Storage Server CPU</strong><br>Reads data & applies filters</div>
+                        <div class="flow-arrow">&#11013;</div>
+                        <div class="flow-box"><strong>4. InfiniBand Network</strong><br>ONLY filtered result set transferred</div>
+                         <div class="flow-arrow">&#11013;</div>
+                        <div class="flow-box"><strong>5. DB Server</strong><br>Receives small, relevant dataset</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="hardware" class="tab-content">
+                 <h2 class="text-2xl font-semibold mb-4 text-slate-800">6. Hardware Components</h2>
+                 <p class="mb-6 text-slate-600">Exadata's software features are enabled by tightly integrated, high-performance hardware. This section covers the typical specifications and how hardware and software work in tandem.</p>
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How are disks organized in storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Disks are organized in a logical hierarchy:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                             <li><strong>Physical Disks:</strong> The actual HDDs or Flash/NVMe drives in the cell.</li>
+                             <li><strong>Cell Disks:</strong> A logical representation of the physical disks.</li>
+                             <li><strong>Grid Disks:</strong> Logical units carved out from Cell Disks. These are presented to the Database Servers.</li>
+                             <li><strong>ASM Disk Groups:</strong> On the database servers, Oracle ASM combines the Grid Disks from all cells into disk groups (e.g., `DATA`, `RECO`) for the database to use.</li>
+                        </ul>
+                    </div>
+                </div>
+                 <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What types of storage are available?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                         <p class="mt-4 text-slate-700">Exadata uses a tiered storage approach for optimal performance:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                             <li><strong>Hard Disk Drives (HDDs):</strong> For high-capacity, cost-effective bulk storage.</li>
+                             <li><strong>Flash/NVMe:</strong> For extremely fast I/O. This tier is used for two key software features:
+                                <ul class="list-circle list-inside ml-4 mt-1">
+                                    <li><strong>Flash Cache:</strong> An intelligent read cache for frequently accessed data.</li>
+                                    <li><strong>Flash Log:</strong> A write-back cache to accelerate redo log writes and commit operations.</li>
+                                </ul>
+                             </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTabId = button.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === targetTabId) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        });
+    });
+
+    // Accordion functionality
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('span');
+            
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+
+    // Communication Flow Toggle
+    const flowToggleButton = document.getElementById('flowToggleButton');
+    const traditionalFlow = document.getElementById('traditionalFlow');
+    const exadataFlow = document.getElementById('exadataFlow');
+
+    flowToggleButton.addEventListener('click', () => {
+        const isExadataVisible = !exadataFlow.classList.contains('hidden');
+        if (isExadataVisible) {
+            exadataFlow.classList.add('hidden');
+            traditionalFlow.classList.remove('hidden');
+            flowToggleButton.textContent = 'Show Exadata Smart Scan Flow';
+        } else {
+            exadataFlow.classList.remove('hidden');
+            traditionalFlow.classList.add('hidden');
+            flowToggleButton.textContent = 'Show Traditional I/O Flow';
+        }
+    });
+
+
+    // Chart.js implementation
+    const ctx = document.getElementById('exadataVsTraditionalChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Data over Network', 'DB Server CPU Load'],
+                datasets: [{
+                    label: 'Traditional Architecture',
+                    data: [100, 90],
+                    backgroundColor: 'rgba(203, 213, 225, 0.7)',
+                    borderColor: 'rgb(100, 116, 139)',
+                    borderWidth: 1
+                }, {
+                    label: 'Exadata Architecture',
+                    data: [15, 25],
+                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Conceptual Impact of Exadata Smart Scan',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.raw}% (Relative)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 110,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Relative Resource Consumption'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                           callback: function(value) {
+                                const label = this.getLabelForValue(value);
+                                if (label.length > 16) {
+                                   return label.split(' ');
+                                }
+                                return label;
+                           }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
+
+</body>
+</html>

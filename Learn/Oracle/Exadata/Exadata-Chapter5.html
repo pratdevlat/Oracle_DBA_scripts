@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exadata Chapter 5Exadata Chapter 5: Troubleshooting Common Issues</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Tech Blue -->
+    <!-- Application Structure Plan: The SPA is designed with a top-level tabbed navigation, mirroring the structure of the "What I Need to Learn" sections in the report. This allows users to easily navigate between distinct topics (e.g., Smart Scan Not Utilized, Storage Cell Connectivity, InfiniBand Problems). Within each tab, detailed content is presented using collapsible accordion sections for each sub-question, providing progressive disclosure. This structure prevents information overload and enables users to delve into specific areas of interest at their own pace. -->
+    <!-- Visualization & Content Choices:
+    1. Smart Scan Not Being Utilized: Goal: Inform, Guide. Method: Textual explanations and specific SQL/command blocks for diagnosis.
+    2. Storage Cell Connectivity Issues: Goal: Inform, Guide. Method: Textual explanations and `dcli`/`cellcli`/OS command blocks for network and service checks.
+    3. InfiniBand Network Problems: Goal: Inform, Guide. Method: Textual explanations and `ibstatus`/`ibstat` command blocks.
+    4. Flash Cache Performance Degradation: Goal: Inform, Guide. Method: Textual explanations and `cellcli` commands for monitoring Flash Cache.
+    5. High I/O Wait Times Specific to Exadata: Goal: Inform, Guide. Method: Textual explanations of wait events and `cellcli`/`V$*` command blocks.
+    6. Cell Disk Failures and Hardware Issues: Goal: Inform, Guide. Method: Textual explanations and `cellcli` commands for disk health and management.
+    7. Storage Cell Memory and Resource Issues: Goal: Inform, Guide. Method: Textual explanations and `cellcli` commands/OS commands for resource monitoring.
+    8. Temperature and Environmental Alerts: Goal: Inform, Guide. Method: Textual explanations and `cellcli` commands for environmental status.
+    9. Performance Degradation After Changes: Goal: Inform, Guide. Method: Textual steps for a systematic approach.
+    10. Systematic Troubleshooting Methodology: Goal: Inform, Guide. Method: Textual overview of the recommended approach.
+    All choices adhere to the NO SVG/Mermaid constraint and prioritize clarity, practical application (commands), and structured learning for an Oracle DBA.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .accordion-content.active {
+            max-height: 2000px; /* Adjust as needed for content */
+        }
+        code {
+            display: block;
+            background-color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900">Exadata Chapter 5: Troubleshooting Common Issues</h1>
+            <p class="mt-2 text-lg text-slate-600">A systematic guide to diagnosing and resolving performance and availability issues on Exadata.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6 overflow-x-auto">
+                <nav class="flex flex-nowrap -mb-px" aria-label="Tabs">
+                    <button class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 active" data-tab="smart_scan_trouble">Smart Scan Not Utilized</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cell_connectivity">Cell Connectivity Issues</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="infiniband_problems">InfiniBand Problems</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="flash_cache_degrade">Flash Cache Degradation</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="high_io_waits">High I/O Wait Times</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="disk_failures">Cell Disk Failures</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cell_resources">Cell Resource Issues</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="env_alerts">Environmental Alerts</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="perf_after_changes">Perf After Changes</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="systematic_troubleshooting">Systematic Methodology</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content: Smart Scan Not Being Utilized - Systematic Diagnosis -->
+            <div id="smart_scan_trouble" class="tab-content active">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">1. Smart Scan Not Being Utilized - Systematic Diagnosis</h2>
+                <p class="mb-6 text-slate-600">Smart Scan is a cornerstone of Exadata performance. If your queries aren't benefiting from it, a systematic diagnosis is required to identify the root cause.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the step-by-step troubleshooting steps when Smart Scan isn't working?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Verify `_optimizer_cell_enabled`:** Ensure the database parameter is not explicitly disabled. (It's true by default on Exadata).</li>
+                            <li>**Check Execution Plan:** The most crucial step. Look for `TABLE ACCESS STORAGE FULL`, `CELL SMART TABLE SCAN`, `STORAGE INDEX`, `FILTER (storage)`, `PROJECTION (storage)`.</li>
+                            <li>**Analyze SQL Query:** Identify predicates, functions, or data types that might prevent offloading (refer Chapter 2).</li>
+                            <li>**Check Statistics:** Outdated or missing table/column statistics can lead the CBO to choose non-Smart Scan plans.</li>
+                            <li>**Monitor `V$SYSSTAT` / `V$SQL_MONITOR`:** Look at `cell_offload_eligible_bytes` vs `cell_offload_returned_bytes`.</li>
+                            <li>**Check Cell Health:** Ensure storage cells are online and `cellsrv` is running (Chapter 4).</li>
+                            <li>**Network Connectivity:** Verify InfiniBand is healthy between DB and Storage servers (later in this chapter).</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I verify table and query characteristics that should enable Smart Scan?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">**Table Characteristics:**</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>Large tables (full table scans are candidates).</li>
+                            <li>Hybrid Columnar Compression (HCC) enabled.</li>
+                        </ul>
+                        <p class="mt-4 text-slate-700">**Query Characteristics:**</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>`SELECT` statements with simple `WHERE` clause predicates (equality, ranges, `LIKE`, `IN` lists).</li>
+                            <li>Selecting only a few columns (`SELECT column1, column2...`).</li>
+                            <li>Using basic aggregate functions (`SUM`, `AVG`, `COUNT`, `MIN`, `MAX`).</li>
+                        </ul>
+                        <pre><code>-- Check if HCC is enabled on a table (from SQL*Plus on DB server)
+SELECT table_name, compression, compress_for
+FROM dba_tables
+WHERE table_name = 'YOUR_LARGE_TABLE';
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This SQL query verifies if a table is compressed and, if so, which HCC level (e.g., `FOR QUERY HIGH`) is applied. HCC tables are strong candidates for Smart Scan.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What execution plan details indicate Smart Scan problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            When analyzing `EXPLAIN PLAN` or `DBMS_XPLAN.DISPLAY`, look for:
+                        </p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**`TABLE ACCESS FULL` (without `STORAGE` or `CELL SMART`):** Indicates a full table scan is happening on the DB server, not offloaded.</li>
+                            <li>**Missing `FILTER (storage)` or `PROJECTION (storage)`:** Even if `TABLE ACCESS STORAGE FULL` is present, these indicate offloading isn't fully utilized for predicates or column filtering.</li>
+                            <li>**High `A-Rows` with low `Starts` on `TABLE ACCESS`:** Suggests large data volumes are being processed by the DB server instead of the cell.</li>
+                        </ul>
+                        <pre><code>-- Example: Get execution plan for a problematic query
+EXPLAIN PLAN FOR SELECT count(*) FROM sales WHERE sales_amount > 1000 AND sale_date < SYSDATE - 365;
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY(FORMAT => 'ALL +IOSTATS +MEMSTATS +COST +PEEKED_BINDS'));
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** The `FORMAT => 'ALL +IOSTATS +MEMSTATS'` options provide detailed runtime statistics about I/O, memory, and CPU for each step in the execution plan. This allows you to pinpoint exactly where the processing is occurring and if offloading is absent or inefficient.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Storage Cell Connectivity Issues -->
+            <div id="cell_connectivity" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">2. Storage Cell Connectivity Issues</h2>
+                <p class="mb-6 text-slate-600">Problems with database servers communicating with storage cells are critical, often leading to database hangs or slow performance. Diagnosing these requires checking network paths and cell services.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I diagnose when database servers can't communicate with storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Look for these symptoms:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>ASM disk groups going offline or remaining in `MOUNTED` but `OFFLINE` state.</li>
+                            <li>Database sessions hanging on I/O wait events related to cells (e.g., `cell single block physical read`, `cell smart scan`).</li>
+                            <li>Errors in database alert logs indicating problems communicating with storage cells (`ORA-15064`, `ORA-15079`).</li>
+                            <li>`cellcli -e list cell` showing cells as `offline`.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What dcli commands help identify storage cell connectivity problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use `dcli` to check the status of cells and their services from the database nodes' perspective:</p>
+                        <pre><code>-- Check if cells are reachable from DB nodes via InfiniBand IPs
+dcli -g cell_group -l root 'ping -c 3 &lt;database_node_infiniband_ip&gt;'
+
+-- Check cell services status across all cells
+dcli -g cell_group -l celladmin 'cellcli -e list cell detail | grep cellServicesStatus'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** The first `dcli` command uses `ping` to verify basic IP-level connectivity over InfiniBand from each storage cell back to a database node (you'd also test from DB to cell). The second command (from Chapter 1) quickly tells you if the critical Exadata cell services are running on all storage cells, as a non-running `cellsrv` would lead to connectivity issues.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I verify cellsrv service status and restart if needed?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">You verify `cellsrv` status via `cellcli` (as shown above). If `cellsrv` is not running, you can attempt to restart it. **Always exercise caution when restarting `cellsrv` as it can momentarily disrupt I/O to the cell.**</p>
+                        <pre><code>-- On the specific storage cell (as celladmin)
+cellcli -e alter cell restart services cellsrv
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command initiates a graceful restart of the `cellsrv` process on the specific storage cell where it's executed. If the service is stuck or unhealthy, a restart might resolve the issue by refreshing its state.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: InfiniBand Network Problems -->
+            <div id="infiniband_problems" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">3. InfiniBand Network Problems</h2>
+                <p class="mb-6 text-slate-600">InfiniBand is the high-speed interconnect; any issues here will severely impact Exadata performance. Diagnosing requires looking at link status, errors, and fabric health.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify InfiniBand network issues affecting performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Symptoms include:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>Increased `cell interconnect` wait events in AWR/`V$SESSION_WAIT`.</li>
+                            <li>High latency for I/O operations (`db_file_cell_read_latency`).</li>
+                            <li>Reduced `cell physical IO interconnect bytes` despite high I/O requests.</li>
+                            <li>Errors in `/var/log/messages` on database or storage servers related to InfiniBand (e.g., `ib_cm_handler: Invalid path`).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What commands help diagnose InfiniBand connectivity and performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use standard InfiniBand utilities on each node:</p>
+                        <pre><code>-- Check HCA status (run as root on DB or Storage server)
+ibstatus
+
+-- Check detailed port statistics for errors/drops (run as root)
+ibstat
+
+-- Test connectivity between nodes using InfiniBand IPs (run as root)
+ping -I &lt;local_ib_ip&gt; &lt;remote_ib_ip&gt;
+
+-- Verify RDMA connectivity (part of Exadata healthcheck, or install rping)
+# Assuming rping is available (may need installation)
+rping -s -v &lt;local_ib_ip&gt;  -- On one node (server mode)
+rping -c -v &lt;remote_ib_ip&gt; -- On another node (client mode)
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `ibstatus` verifies if the InfiniBand adapter link is up. `ibstat` provides critical counters for errors (e.g., `LinkRetriesExceeded`, `RxErrors`, `SymbolErrors`) which indicate network quality issues. `ping -I` confirms IP-level reachability over the InfiniBand network. `rping` (if installed) is a dedicated RDMA ping tool that tests the underlying RDMA layer used for iDB communication, providing direct validation of the critical path.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I verify InfiniBand fabric health across the cluster?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Beyond individual node checks, verify the InfiniBand switches. While direct login to switches isn't always standard, you can check their health via IPMI or Exadata's `oemcli` (if configured with EM).
+                        </p>
+                        <pre><code>-- On an InfiniBand switch (often via SSH to its management IP)
+show health
+show ports
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These are common commands for InfiniBand switches to check overall health and port status (link state, errors). Accessing switches directly requires knowing their management IPs and credentials.
+                        </p>
+                        <p class="mt-4 text-slate-700">Also, analyze ExaWatcher data for `ibstat` counters aggregated across all nodes (Chapter 3 & 4).</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Flash Cache Performance Degradation -->
+            <div id="flash_cache_degrade" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">4. Flash Cache Performance Degradation</h2>
+                <p class="mb-6 text-slate-600">Flash Cache significantly speeds up read I/O. If its performance degrades, it can lead to slower queries. Diagnosing involves checking hit ratios, utilization, and underlying flash hardware.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What metrics indicate Flash Cache isn't working optimally?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Low `FC_HIT_RATIO`:** Below expected baselines (e.g., < 90% for OLTP, < 70% for DW).</li>
+                            <li>**High `FC_BY_REQ_DR_MISSES_SEC`:** Many read requests are missing the cache and going to slower HDDs.</li>
+                            <li>Increased `cell single block physical read` or `cell multiblock physical read` wait events (if these are going to HDD and not being cached).</li>
+                            <li>High read latency from `V$CELL_IO_METRIC` where `objectType` is `CELL` or `PHYSICALDISK` for HDDs.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check Flash Cache hit ratios and utilization using cellcli?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">From the storage cell, use `cellcli`:</p>
+                        <pre><code>cellcli -e list flashcache detail
+-- Look for 'hitRatio' and 'cachedBytes'
+
+cellcli -e list metriccurrent where objectType='FLASHCACHE'
+-- Provides real-time metrics, including hit rates
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `list flashcache detail` gives overall cache size, used space, and current hit ratio. `list metriccurrent` filtered by `objectType='FLASHCACHE'` provides more granular, real-time statistics, including hits and misses per second.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What causes Flash Cache performance to degrade over time?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Workload Change:** A shift in data access patterns causes the cache to hold less relevant data.</li>
+                            <li>**"Cache Pollution":** Too many large, single-scan operations filling the cache with data that won't be re-read.</li>
+                            <li>**Insufficient Flash Cache Size:** Workload grows beyond cache capacity.</li>
+                            <li>**IORM Misconfiguration:** A low-priority database/PDB might be consuming disproportionate Flash Cache resources.</li>
+                            <li>**Failing Flash Devices:** Degrading or failed flash disks can impact cache performance.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What steps can I take to optimize Flash Cache performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Identify culprits:** Use `V$SEGMENT_STATISTICS` to find segments with high physical reads that aren't hitting cache.</li>
+                            <li>**Use `CELLFLASHCACHE KEEP`:** For small, frequently accessed tables/indexes.</li>
+                            <li>**Use `CELLFLASHCACHE NONE`:** For very large objects that are rarely re-read (e.g., historical archive tables).</li>
+                            <li>**Review IORM:** Ensure critical workloads have appropriate I/O shares and Flash Cache prioritization.</li>
+                            <li>**Investigate queries:** Ensure Smart Scan is effective to reduce data read.</li>
+                        </ul>
+                        <pre><code>-- Example: Mark a table to NOT use Flash Cache (from SQL*Plus on DB server)
+ALTER TABLE my_archive_table CELLFLASHCACHE NONE;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This DDL statement hints to `cellsrv` that `my_archive_table`'s blocks should not be cached in Flash Cache. This prevents cache pollution by data that is unlikely to be re-read, freeing space for more frequently accessed "hot" blocks.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: High I/O Wait Times Specific to Exadata -->
+            <div id="high_io_waits" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">5. High I/O Wait Times Specific to Exadata</h2>
+                <p class="mb-6 text-slate-600">While Exadata excels at I/O, bottlenecks can still occur. Understanding Exadata-specific wait events and correlating them with cell-level metrics is crucial for diagnosis.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What wait events are specific to Exadata I/O issues?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>`cell single block physical read`</li>
+                            <li>`cell multiblock physical read`</li>
+                            <li>`cell smart scan`</li>
+                            <li>`cell interconnect`</li>
+                            <li>`db file cell multiblock physical read`</li>
+                            <li>`log file parallel write` (if Flash Log issues)</li>
+                        </ul>
+                        <pre><code>-- Top wait events (from SQL*Plus on DB server)
+SELECT event, total_waits, total_timeouts, time_waited, average_wait
+FROM V$SYSTEM_EVENT
+WHERE event LIKE 'cell %' OR event LIKE 'db file cell %' OR event LIKE 'log file parallel write'
+ORDER BY time_waited DESC;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query provides a system-wide overview of time spent waiting on Exadata-specific I/O events. High `time_waited` for these events indicates an I/O bottleneck, which then needs to be further investigated at the cell level.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify if I/O problems are at the storage cell level?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>High cell CPU utilization (`CPU_UTILIZATION_SM_SEC` in `V$CELL_IO_METRIC`).</li>
+                            <li>Low Flash Cache hit ratios or high Flash Log waits.</li>
+                            <li>Spikes in `disk_reads_per_sec` or `io_requests_per_sec` on specific physical disks (`list metriccurrent where objectType='PHYSICALDISK'`).</li>
+                            <li>Alerts on the storage cell itself (Chapter 4).</li>
+                            <li>Uneven load distribution across cells (hot spots).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-center font-semibold text-blue-700">
+                        What IORM configuration issues can cause I/O problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Incorrect shares:** Critical databases/PDBs assigned too low an I/O share.</li>
+                            <li>**No plan:** No IORM plan configured, leading to uncontrolled I/O contention.</li>
+                            <li>**Objective mismatch:** `objective=throughput` for an OLTP database, or `objective=latency` for a batch/DW database.</li>
+                            <li>**Excessive I/O by low-priority consumers:** Low-priority workloads starving higher-priority ones.</li>
+                        </ul>
+                        <pre><code>-- Check current IORM plan (from storage cell)
+cellcli -e list iormplan detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** Reviewing the `IORM Plan` details helps identify if the configured I/O resource allocation aligns with your workload priorities. Misconfigured shares or objectives are common causes of I/O performance issues under contention.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Cell Disk Failures and Hardware Issues -->
+            <div id="disk_failures" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">6. Cell Disk Failures and Hardware Issues</h2>
+                <p class="mb-6 text-slate-600">Hardware failures, particularly disk failures, are inevitable. Exadata is designed with redundancy (ASM) but proactive monitoring and swift action are crucial.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify failing or failed cell disks?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Look for these indicators:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**Alerts:** Critical alerts on the storage cell (e.g., `Cell Disk State Changed to &lt;FAILED&gt;`, `Physical Disk Failed`).</li>
+                            <li>**`cellcli`:** `list physicaldisk` or `list celldisk` will show `status: failed` or `status: warning`.</li>
+                            <li>**ASM:** `V$ASM_DISK` and `V$ASM_DISKGROUP` will show disks as `OFFLINE` or disk groups in a degraded state.</li>
+                            <li>**Error Logs:** Messages in `alert.log` (database) and `cellsrv` trace files (cell) indicating disk issues.</li>
+                        </ul>
+                        <pre><code>-- On a storage cell:
+cellcli -e list physicaldisk attributes name, status, physicalDiskId, errorCount
+
+-- On a database server (as sysasm):
+SELECT name, path, mount_status, header_status, state, mode_status
+FROM V$ASM_DISK;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `cellcli list physicaldisk` is the primary command to check the physical health of drives on a cell. The `errorCount` attribute can show accumulating errors before a full failure. `V$ASM_DISK` from the database server shows the ASM's perspective of the disk, confirming its online/offline status and header integrity.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is the process for handling disk failures?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Identify Failed Disk:** Use `cellcli list physicaldisk` and `V$ASM_DISK`.</li>
+                            <li>**Offline Disk (if not automatic):** ASM typically offlines the disk automatically. If not, `ALTER DISKGROUP ... OFFLINE DISK ...;`.</li>
+                            <li>**Replace Hardware:** Physically replace the faulty disk (often hot-swappable).</li>
+                            <li>**Verify Replacement:** `cellcli list physicaldisk` should show the new disk as `active` or `recovering`.</li>
+                            <li>**Online/Add Disk to ASM:** ASM should automatically discover and add/online the disk. If not, `ALTER DISKGROUP ... ONLINE DISK ...;` or `ALTER DISKGROUP ... ADD DISK 'path_to_new_disk';`.</li>
+                            <li>**Monitor Rebalance:** Monitor ASM rebalance operation to restore full redundancy.</li>
+                        </ol>
+                        <pre><code>-- Example of manual disk online in ASM (if needed)
+ALTER DISKGROUP DATA ONLINE DISK 'DATA_00_cell01';
+
+-- Example of monitoring ASM rebalance
+SELECT * FROM V$ASM_OPERATION;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** While ASM often automates many steps, knowing these commands is crucial for troubleshooting or manual intervention. `ALTER DISKGROUP ... ONLINE DISK` forces ASM to bring a disk online. `V$ASM_OPERATION` shows the progress of any ongoing ASM operations, including rebalances.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Storage Cell Memory and Resource Issues -->
+            <div id="cell_resources" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">7. Storage Cell Memory and Resource Issues</h2>
+                <p class="mb-6 text-slate-600">Storage cells, though specialized, are still servers that can face resource contention (CPU, memory). Diagnosing these involves monitoring cell-level metrics and understanding service behavior.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I diagnose storage cell memory problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Symptoms include `cellsrv` crashes, `OOM (Out Of Memory)` errors in `cellsrv` trace files, or general cell unresponsiveness.</p>
+                        <pre><code>-- On a storage cell (as root)
+free -h
+top
+-- (look for high cellsrv memory usage)
+
+-- From cellcli:
+cellcli -e list cell detail | grep memory
+-- Look for memory usage statistics
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `free -h` shows overall OS memory usage. `top` provides real-time process statistics, allowing you to see if `cellsrv` or other processes are consuming excessive memory. `list cell detail | grep memory` gives the cell's total memory and potentially memory-related statistics from the cell services perspective.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify resource contention on storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**High CPU Utilization:** Check `CPU_UTILIZATION_SM_SEC` in `V$CELL_IO_METRIC` or `cellcli -e list metriccurrent`.</li>
+                            <li>**I/O Queue Lengths:** High disk queue lengths (often seen in `iostat` output on Linux, or derived from cell metrics) can indicate I/O saturation.</li>
+                            <li>**IORM Conflicts:** Review IORM plan to see if resource allocation is causing contention.</li>
+                        </ul>
+                        <pre><code>-- From storage cell (as root)
+iostat -x 1 5
+-- (Look at %util and avgqu-sz for disks)
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `iostat -x 1 5` provides detailed I/O statistics for disks. High `%util` (percentage of time disk is busy) and `avgqu-sz` (average queue length) can point to I/O saturation at the physical disk level on the cell.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What causes storage cell services to become unresponsive?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Resource Exhaustion:** Severe CPU, memory, or I/O saturation preventing services from responding.</li>
+                            <li>**Software Bugs:** Less common, but can happen after patching or specific workload patterns.</li>
+                            <li>**Underlying OS Issues:** Kernel panic, critical OS service failure.</li>
+                            <li>**Corrupted configuration files:** Rare, but can prevent `cellsrv` from starting.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Temperature and Environmental Alerts -->
+            <div id="env_alerts" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">8. Temperature and Environmental Alerts</h2>
+                <p class="mb-6 text-slate-600">Monitoring environmental factors like temperature and power is crucial for hardware longevity and preventing unexpected shutdowns. Exadata provides alerts for these conditions.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor and respond to temperature alerts?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Monitor `cellcli -e list alert` for alerts like `Server Temperature Too High`. These alerts usually trigger automatically when thresholds are exceeded.</p>
+                        <pre><code>-- On a storage cell:
+cellcli -e list metriccurrent where objectType='TEMPERATURE'
+-- Look for 'currentValue' and 'warningThreshold'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This `cellcli` command allows you to retrieve real-time temperature readings from various sensors within the cell. You can compare the `currentValue` with `warningThreshold` and `criticalThreshold` to understand the severity.
+                        </p>
+                        <p class="mt-4 text-slate-700">**Response:** If a temperature alert occurs, immediately check the data center cooling, rack airflow, and server fans. A persistent high temperature can lead to hardware damage or automatic shutdown.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What hardware alerts require immediate attention?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Disk failures:** `Physical Disk Failure`, `Cell Disk State Changed to FAILED`.</li>
+                            <li>**Power supply failures:** `Power Supply Status Changed to FAILED`.</li>
+                            <li>**Memory errors:** `Memory Error Corrected`, `Memory Error Uncorrectable`.</li>
+                            <li>**Fan failures:** `Fan Fault`.</li>
+                            <li>**High temperature:** `Server Temperature Too High`, `Disk Temperature Too High`.</li>
+                            <li>**InfiniBand port errors:** Critical errors indicating a link down.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Performance Degradation After Changes -->
+            <div id="perf_after_changes" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">9. Performance Degradation After Changes</h2>
+                <p class="mb-6 text-slate-600">Troubleshooting performance issues that arise immediately after a change (e.g., patch, configuration, new application deployment) requires a methodical approach of comparison and rollback.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I diagnose performance problems after Exadata configuration changes?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Baseline Comparison:** Always compare current performance metrics (from AWR, `V$*`, ExaWatcher) against a known good baseline from before the change.</li>
+                            <li>**Identify the Change:** Pinpoint all changes made recently (configuration, patch, application deployment, database changes).</li>
+                            <li>**Isolate the Impact:** Focus on metrics related to the area of change (e.g., if IORM changed, check I/O shares and wait times; if a patch, check specific patch-related known issues).</li>
+                            <li>**Review Logs:** Check `alert.log` (DB), `cellsrv` trace files (cell), OS logs (`/var/log/messages`) for errors coinciding with the change or performance degradation.</li>
+                            <li>**Execution Plans:** If SQL queries are slower, compare their execution plans before and after the change.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What baseline metrics should I compare against?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Key metrics for baselining include:
+                        </p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**Database:** Top wait events, CPU usage, logical/physical I/O, SQL elapsed time for critical queries.</li>
+                            <li>**Exadata Cells:** `cell physical IO interconnect bytes`, `cell CPU utilization`, Flash Cache hit ratio, Flash Log throughput, physical disk I/O metrics.</li>
+                            <li>**InfiniBand:** `ibstat` error counters, link status, `cell interconnect` waits.</li>
+                            <li>**OS:** CPU utilization, memory usage, disk I/O (from `top`, `free`, `iostat`).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What configuration changes commonly cause performance problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**IORM Plan Changes:** Incorrect I/O shares can starve critical workloads.</li>
+                            <li>**ASM Disk Group Changes:** Adding/removing disks, changing redundancy, or rebalancing can impact performance temporarily.</li>
+                            <li>**Database Parameter Changes:** Incorrect `optimizer_` parameters or memory allocations.</li>
+                            <li>**Network Configuration Changes:** Impacts InfiniBand or public network.</li>
+                            <li>**Application Code Changes:** New SQL queries or application logic can introduce inefficient access patterns.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Systematic Troubleshooting Methodology -->
+            <div id="systematic_troubleshooting" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">10. Systematic Troubleshooting Methodology</h2>
+                <p class="mb-6 text-slate-600">A structured approach to troubleshooting ensures efficient problem resolution and prevents chasing symptoms instead of root causes.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is the recommended troubleshooting approach for Exadata issues?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ol class="list-decimal list-inside mt-4 space-y-2 text-slate-700">
+                            <li>**Define the Problem:** What is happening? When did it start? How many users/applications are affected? What are the symptoms (errors, slowness, hangs)?</li>
+                            <li>**Gather Information:** Collect relevant AWRs, `V$` views, `cellcli` output, OS logs, ExaWatcher data for the affected period.</li>
+                            <li>**Identify Changes:** What changes were made recently (hardware, software, configuration, application)?</li>
+                            <li>**Isolate the Component:** Is it database-related, storage-related, network-related, or application-related?</li>
+                            <li>**Formulate Hypothesis:** Based on symptoms and data, what's the most likely cause?</li>
+                            <li>**Test Hypothesis:** Implement a small, controlled change or perform a specific diagnostic.</li>
+                            <li>**Verify Solution:** Confirm the problem is resolved and no new issues are introduced.</li>
+                            <li>**Document:** Record the problem, diagnosis, solution, and lessons learned.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What information should I gather before contacting Oracle Support?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">A complete diagnostic package greatly speeds up support resolution:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**Full AWR Report:** Covering the period of the issue.</li>
+                            <li>**`diagcollection.pl` bundles:** From all affected database and storage nodes.</li>
+                            <li>**`V$*` snapshots:** Relevant `V$SYSSTAT`, `V$SESSION_WAIT`, `V$SQL_MONITOR`, `V$CELL_IO_METRIC` outputs during the problem.</li>
+                            <li>**Alert Logs & Trace Files:** From affected database instances and storage cells.</li>
+                            <li>**`cellcli` output:** From `list cell detail`, `list alert`, `list physicaldisk`.</li>
+                            <li>**OS logs:** `/var/log/messages`.</li>
+                            <li>**Problem description:** Clear symptoms, timestamp of occurrence, and any troubleshooting steps already taken.</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">Refer to Chapter 4 for detailed `diagcollection.pl` usage.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTabId = button.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === targetTabId) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        });
+    });
+
+    // Set initial active tab
+    document.querySelector('.tab-button[data-tab="smart_scan_trouble"]').click();
+
+    // Accordion functionality
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('span');
+            
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>

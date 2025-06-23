@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exadata Chapter 3: Performance Monitoring & Tuning</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Tech Blue -->
+    <!-- Application Structure Plan: The SPA is designed with a top-level tabbed navigation, mirroring the structure of the "What I Need to Learn" sections in the report. This allows users to easily navigate between distinct topics (e.g., AWR Metrics, Monitoring Tools). Within each tab, detailed content is presented using collapsible accordion sections for sub-questions, providing progressive disclosure. This structure prevents information overload and enables users to delve into specific areas of interest at their own pace. The interactive elements like charts and toggle buttons are embedded directly within these sections to provide immediate context and enhance understanding of the discussed concepts, especially for comparisons and performance insights. -->
+    <!-- Visualization & Content Choices:
+    1. Exadata-Specific AWR Metrics: Goal: Compare. Method: A Chart.js bar chart visually differentiates "Cell Offload I/O" from "Traditional I/O" to highlight the benefit of offloading as seen in AWR. Interaction: Accordion.
+    2. Smart Scan Efficiency Monitoring: Goal: Measure, Analyze. Method: A Chart.js line chart illustrating "Data Scanned" vs. "Data Returned" over time for a query, demonstrating Smart Scan's data reduction. Interaction: Accordion.
+    3. Storage Cell Performance Monitoring: Goal: Monitor, Identify. Method: A conceptual Chart.js pie chart for "Flash Cache Usage Distribution" and simple text for other metrics. Interaction: Accordion.
+    4. Communication Flow (Reused from Ch1, adapted): Goal: Compare. Method: HTML/CSS flow diagram with toggle, to visually contrast traditional vs. Exadata I/O paths (reinforcing Chapter 1 concepts in a monitoring context). Interaction: Toggle button.
+    All choices adhere to the NO SVG/Mermaid constraint and prioritize clarity, practical application (commands), and visual understanding for an Oracle DBA.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .accordion-content.active {
+            max-height: 2000px; /* Adjust as needed for content */
+        }
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .flow-box {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            width: 90%;
+            max-width: 300px;
+        }
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: #9ca3af;
+            transform: rotate(90deg);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px; /* Base height */
+            max-height: 400px; /* Max height to prevent overflow */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px; /* Adjust for larger screens */
+            }
+        }
+        code {
+            display: block;
+            background-color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900">Exadata Chapter 3: Performance Monitoring & Tuning</h1>
+            <p class="mt-2 text-lg text-slate-600">Mastering Exadata performance through effective monitoring, analysis, and tuning.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6">
+                <nav class="flex flex-wrap -mb-px" aria-label="Tabs">
+                    <button class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 active" data-tab="awr">AWR Metrics</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="views">Performance Views</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="smartscan_efficiency">Smart Scan Efficiency</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cell_perf">Storage Cell Perf</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="infiniband_monitoring">InfiniBand Monitoring</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="iorm">IORM</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="tools">Monitoring Tools</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="tuning">Tuning Strategies</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="troubleshooting">Troubleshooting</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content: AWR Metrics -->
+            <div id="awr" class="tab-content active">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">1. Exadata-Specific AWR Metrics</h2>
+                <p class="mb-6 text-slate-600">AWR reports are your primary source of historical performance data. In Exadata, several sections and metrics provide unique insights into offloading efficiency and cell activity.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What AWR sections are unique to Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Look for these key sections in an AWR report generated from an Exadata system:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li><strong>"Cell Offload Statistics":</strong> This is the most important section, detailing data offloaded, bytes saved by Smart Scan, Storage Index, and columnar cache.</li>
+                            <li><strong>"I/O Profile":</strong> Provides a breakdown of physical I/O operations, distinguishing between cell I/O and non-cell I/O.</li>
+                            <li><strong>"Wait Events" (Exadata specific wait events):</strong> Shows events like 'cell single block physical read', 'cell multiblock physical read', 'cell smart scan', 'cell interconnect', which indicate communication with storage cells.</li>
+                            <li><strong>"Service Statistics / SQL Statistics":</strong> SQL statements will show `cell_offload_eligible_bytes` and `cell_offload_returned_bytes`.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I interpret "cell physical IO" vs traditional physical I/O stats?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            In traditional Oracle, `physical reads` directly relates to blocks read from storage. In Exadata, `cell physical IO interconnect bytes` represents the *actual data volume* returned from the storage cells *after* Smart Scan processing. The difference is critical:
+                        </p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>**`physical reads` / `physical reads direct`:** These still show total blocks requested by the database server, but in Exadata, a significant portion of the *work* for these reads might be offloaded.</li>
+                            <li>**`cell physical IO interconnect bytes`:** This is the bytes transferred *over InfiniBand* from the cells to the DB servers after offloading. A high value relative to `physical reads bytes` means Smart Scan is effective, as less raw data is transferred.</li>
+                        </ul>
+                        <div class="chart-container my-4">
+                            <canvas id="awrComparisonChart"></canvas>
+                        </div>
+                        <p class="text-center text-sm text-slate-500 italic">This chart conceptually illustrates the reduction in data volume transmitted between storage and compute when Smart Scan is active, as reflected in AWR metrics.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Key Performance Views and Statistics -->
+            <div id="views" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">2. Key Performance Views and Statistics</h2>
+                <p class="mb-6 text-slate-600">Directly querying Exadata-specific `V$` views on the database servers provides real-time insights into system and cell performance. These views reveal detailed metrics on storage, I/O, and offloading.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the important V$ views specific to Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li><strong>`V$CELL_STATE`</strong>: Information about the state and attributes of the storage cells.</li>
+                            <li><strong>`V$CELL_DISK`</strong>: Detailed information about cell disks and grid disks.</li>
+                            <li><strong>`V$CELL_IO_METRIC`</strong>: Real-time I/O metrics for storage cells, including offload statistics.</li>
+                            <li><strong>`V$SYSSTAT`</strong>: Contains system-wide statistics, many with `cell` prefix (e.g., `cell physical IO interconnect bytes`).</li>
+                            <li><strong>`V$SESSTAT`</strong>: Session-level statistics, useful for drilling down to specific user or background processes.</li>
+                            <li><strong>`V$SQL` / `V$SQLSTATS` / `V$SQL_MONITOR`</strong>: For SQL-level offload metrics.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I query V$CELL_STATE and interpret the results?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">`V$CELL_STATE` provides a comprehensive overview of each storage cell known to the database. It's useful for verifying cell status and configuration.</p>
+                        <pre><code>SELECT cell_name, status, cell_state, ip_address, cell_version, cpu_count, memory_size, flash_cache_size
+FROM V$CELL_STATE;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query displays the name, overall status (`online`, `offline`, `warning`), more detailed `cell_state` (e.g., `ACTIVE`), IP address, software version, and hardware specifications (CPU, memory, flash cache size) for each storage cell. This helps confirm cells are up, reachable, and correctly configured.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What does V$CELL_DISK tell me about storage cell performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">`V$CELL_DISK` provides details on the grid disks. While it doesn't show direct "performance," it reveals configuration that impacts it, like disk type and size, and overall disk health.</p>
+                        <pre><code>SELECT cell_name, disk_name, disk_type, total_size_mb, usable_size_mb, status
+FROM V$CELL_DISK;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query lists the grid disks, their type (e.g., `HardDisk`, `FlashDisk`), allocated size, and status. It's essential for ensuring all grid disks are online and for understanding the underlying storage configuration that ASM uses.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I use V$SESSTAT and V$SYSSTAT for Exadata-specific metrics?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">These views are critical. Focus on statistics with the 'cell' prefix for Exadata-specific insights.</p>
+                        <pre><code>-- System-wide Exadata stats
+SELECT name, value
+FROM V$SYSSTAT
+WHERE name LIKE 'cell %' OR name LIKE '%bytes saved by%';
+
+-- Session-level Exadata stats for a specific SID
+SELECT s.sid, sn.name, ss.value
+FROM V$SESSION s, V$SESSTAT ss, V$STATNAME sn
+WHERE s.sid = &amp;sid AND ss.sid = s.sid AND sn.statistic# = ss.statistic#
+AND (sn.name LIKE 'cell %' OR sn.name LIKE '%bytes saved by%');
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These queries help you monitor the amount of data processed/saved by Smart Scan and other cell features. Key statistics include `cell physical IO interconnect bytes` (actual data transferred after offload), `cell physical IO bytes saved by storage index` (data skipped due to storage indexes), and `cell physical IO bytes saved by columnar cache` (data saved by HCC). Monitoring these shows the effectiveness of Exadata features at the system or session level.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Smart Scan Efficiency Monitoring -->
+            <div id="smartscan_efficiency" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">3. Smart Scan Efficiency Monitoring</h2>
+                <p class="mb-6 text-slate-600">Measuring how effectively Smart Scan is reducing I/O and CPU load is crucial. This section provides methods to assess offloading and identify queries that might not be leveraging it optimally.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I measure Smart Scan efficiency and effectiveness?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">The primary way is to compare the amount of data eligible for offloading versus the amount actually returned by the cells. This indicates the "data reduction ratio" achieved by Smart Scan.</p>
+                        <div class="chart-container my-4">
+                            <canvas id="smartScanEfficiencyChart"></canvas>
+                        </div>
+                        <p class="text-center text-sm text-slate-500 italic">This chart illustrates the dramatic reduction in data transferred when Smart Scan is effective, showing the bytes scanned vs. bytes returned for a conceptual query.</p>
+                        <p class="mt-4 text-slate-700">
+                            Metrics to look at:
+                        </p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>`cell_offload_eligible_bytes`: Total bytes that could potentially be offloaded.</li>
+                            <li>`cell_offload_returned_bytes`: Actual bytes returned by the cell to the DB server after offloading.</li>
+                            <li>**Efficiency Ratio:** (`cell_offload_eligible_bytes` - `cell_offload_returned_bytes`) / `cell_offload_eligible_bytes`</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify queries that should use Smart Scan but aren't?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Look for long-running full table scans (`TABLE ACCESS FULL`) in AWR or `V$SQL_MONITOR` that show high `physical_read_bytes` but low or zero `cell_offload_eligible_bytes` or `cell_offload_returned_bytes`.
+                        </p>
+                        <pre><code>-- Find top SQL by physical reads not showing cell offload activity
+SELECT s.sql_id, s.sql_text,
+       s.physical_read_bytes,
+       s.cell_offload_eligible_bytes,
+       s.cell_offload_returned_bytes
+FROM V$SQL s
+WHERE s.parsing_schema_name NOT IN ('SYS', 'SYSTEM')
+  AND s.physical_read_bytes > 0
+  AND (s.cell_offload_eligible_bytes IS NULL OR s.cell_offload_eligible_bytes = 0)
+ORDER BY s.physical_read_bytes DESC;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query identifies SQL statements that are performing significant direct physical reads (often indicating full table scans) but are not showing any signs of Smart Scan offloading (`cell_offload_eligible_bytes` is zero or null). These are prime candidates for further investigation to understand why offloading is not occurring.
+                        </p>
+                        <p class="mt-4 text-slate-700">Also, examine their execution plans for `TABLE ACCESS FULL` without `STORAGE` or `SMART SCAN` operations. Refer back to Chapter 2 for Smart Scan conditions and prevention factors.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor storage index effectiveness?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Monitor the `cell physical IO bytes saved by storage index` metric in `V$SYSSTAT` (system-wide) or `V$SESSTAT` (session-specific). A higher value indicates that Storage Indexes are effectively pruning I/O.
+                        </p>
+                        <pre><code>SELECT name, value
+FROM V$SYSSTAT
+WHERE name = 'cell physical IO bytes saved by storage index';
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This statistic directly quantifies the amount of I/O that was avoided thanks to Storage Indexes. A consistently increasing value means they are actively contributing to performance by preventing unnecessary disk reads.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Storage Cell Performance Monitoring -->
+            <div id="cell_perf" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">4. Storage Cell Performance Monitoring</h2>
+                <p class="mb-6 text-slate-600">Monitoring individual storage cells is critical for proactive issue detection. Cell performance problems can significantly impact database query performance. This section explores how to detect and diagnose such issues.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor individual storage cell performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use `cellcli` on the storage cells themselves, or `V$CELL_IO_METRIC` from a database server.</p>
+                        <pre><code>-- On a Storage Cell via SSH
+cellcli -e list metriccurrent;
+-- This command shows current performance metrics for the cell, including
+-- MB/sec read/written, I/O requests per second, CPU utilization,
+-- and Flash Cache/Log statistics.
+
+-- From Database Server (querying current metrics from all cells)
+SELECT cell_name, metric_name, metric_value, unit_name
+FROM V$CELL_IO_METRIC
+WHERE metric_name IN ('MB_READ_FC', 'MB_WRITE_FC', 'FC_IO_BY_REQ_DR_HITS_SEC', 'FC_IO_BY_REQ_DR_MISSES_SEC',
+                      'MB_READ_IO_CELL_CS_SM_SEC', 'MB_WRITTEN_IO_CELL_CS_SEC')
+ORDER BY cell_name, metric_name;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `cellcli -e list metriccurrent` is your go-to on the cell itself for real-time performance. `V$CELL_IO_METRIC` provides similar insights but aggregated across all cells and accessible from SQL. Monitoring metrics like MB/sec read/written (both to disk and from flash), I/O operations per second, and CPU utilization on cells helps identify bottlenecks.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What indicates a storage cell performance problem?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>High `cell interconnect bytes` with low `cell physical IO interconnect bytes saved by storage index` (suggests ineffective SI).</li>
+                            <li>High `cell CPU usage` (from `V$CELL_IO_METRIC` or `cellcli`) without corresponding high `database server CPU`, meaning offload is happening but cells are overloaded.</li>
+                            <li>Increased `cell single block physical read` or `cell multiblock physical read` wait events with higher average wait times in AWR.</li>
+                            <li>Low Flash Cache hit ratios when expecting high hits.</li>
+                            <li>High disk queue length on individual cells.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify hot spots or uneven load distribution?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Compare `MB_READ_FC`, `MB_WRITE_FC`, `MB_READ_IO_CELL_CS_SM_SEC`, and `MB_WRITTEN_IO_CELL_CS_SEC` across different cells in `V$CELL_IO_METRIC`. Significant discrepancies indicate uneven load.
+                        </p>
+                        <pre><code>-- Compare I/O metrics across cells
+SELECT cell_name,
+       SUM(CASE WHEN metric_name = 'MB_READ_FC' THEN metric_value ELSE 0 END) AS MB_READ_FROM_FLASH,
+       SUM(CASE WHEN metric_name = 'MB_READ_IO_CELL_CS_SM_SEC' THEN metric_value ELSE 0 END) AS MB_READ_SMART_SCAN_DISK,
+       SUM(CASE WHEN metric_name = 'CPU_UTILIZATION_SM_SEC' THEN metric_value ELSE 0 END) AS CELL_CPU_UTIL
+FROM V$CELL_IO_METRIC
+GROUP BY cell_name
+ORDER BY cell_name;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query aggregates key I/O and CPU metrics per cell. By observing large differences in these values between cells, you can pinpoint cells that are experiencing higher loads (hot spots) or those that are underutilized, indicating potential workload distribution issues.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What metrics show flash cache hit ratios and effectiveness?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">
+                            Flash Cache hit ratios are reported per cell via `cellcli` or in `V$CELL_IO_METRIC`.
+                        </p>
+                        <pre><code>-- On a Storage Cell via SSH
+cellcli -e list metriccurrent attributes fc_hit_ratio;
+-- Or from DB Server:
+SELECT cell_name, metric_value AS FLASH_CACHE_HIT_RATIO
+FROM V$CELL_IO_METRIC
+WHERE metric_name = 'FC_HIT_RATIO'
+ORDER BY cell_name;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `FC_HIT_RATIO` directly tells you the percentage of read requests that were served from Flash Cache. A high ratio (e.g., > 90%) indicates effective Flash Cache usage. You also monitor `FC_BY_REQ_DR_HITS_SEC` (hits per second) and `FC_BY_REQ_DR_MISSES_SEC` (misses per second) to see the volume.
+                        </p>
+                        <div class="chart-container my-4">
+                            <canvas id="flashCacheUsageChart"></canvas>
+                        </div>
+                        <p class="text-center text-sm text-slate-500 italic">This chart provides a conceptual view of how Flash Cache utilization might be distributed across different data types, highlighting its effectiveness in serving frequently accessed blocks.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: InfiniBand Network Monitoring -->
+            <div id="infiniband_monitoring" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">5. InfiniBand Network Monitoring</h2>
+                <p class="mb-6 text-slate-600">The InfiniBand network is the high-performance backbone of Exadata. Monitoring it for bottlenecks and connectivity issues is vital for maintaining optimal system performance.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor InfiniBand network performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Monitor InfiniBand directly on the OS of database and storage servers.</p>
+                        <pre><code>-- On Database or Storage Server (as root)
+ibstatus       -- Checks InfiniBand HCA status
+ibstat         -- Shows detailed port statistics (errors, rates)
+perfquery      -- (If installed) Provides advanced InfiniBand performance counters
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `ibstatus` confirms the physical link status of InfiniBand ports. `ibstat` provides statistics like packets transmitted/received, errors, and link quality. `perfquery` offers deeper insights into InfiniBand counters, useful for diagnosing specific network issues like congestion or packet loss at the fabric level.
+                        </p>
+                        <pre><code>-- Check InfiniBand switch health (from any Exadata node as root)
+ssh cell_or_db_node_name 'ipmitool sensor | grep -E "FAN|Temp"'
+-- (Replace with actual switch IP if direct access is configured)
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** While not a direct InfiniBand metric, monitoring the health of the InfiniBand switches (fans, temperatures) via IPMI is crucial as physical problems can severely impact performance. You'd typically SSH to a node and then potentially SSH to the switch or use `exacli` if configured.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What metrics indicate network bottlenecks between compute and storage?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>High `cell interconnect bytes` in `V$SYSSTAT` (indicating high data transfer) combined with increased `cell single block physical read` or `cell multiblock physical read` wait times in AWR.</li>
+                            <li>High `ibstat` counters for errors or retransmissions on InfiniBand ports.</li>
+                            <li>High latency observed by `db_file_cell_read_latency` or `db_file_cell_write_latency` wait events.</li>
+                            <li>In AWR, look at "Top 5 Timed Foreground Events" for `cell interconnect` waits.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: I/O Resource Manager (IORM) -->
+            <div id="iorm" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">6. I/O Resource Manager (IORM)</h2>
+                <p class="mb-6 text-slate-600">IORM is a powerful Exadata feature that enables you to prioritize I/O resources across different databases, Pluggable Databases (PDBs), or consumer groups, ensuring critical workloads meet their performance SLAs.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is IORM and how does it help manage I/O resources?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">IORM is a feature of Exadata Storage Server Software that manages I/O contention at the storage cell level. It allows you to define policies (IORM plans) to prioritize I/O requests from different databases or PDBs. This prevents a "noisy neighbor" problem where one high-I/O workload starves others.</p>
+                        <p class="mt-2 text-slate-700">It ensures that critical applications receive guaranteed I/O bandwidth and latency, even under heavy load, by dynamically allocating resources.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I configure IORM for different database workloads?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">IORM is configured using `cellcli` commands on the storage cells. You define an IORM plan that allocates percentages of I/O resources to different databases, PDBs, or categories (e.g., `OLTP`, `BATCH`).</p>
+                        <pre><code>-- Example IORM plan:
+-- Sets default IORM plan (if one exists)
+cellcli -e alter cell attributes iormPlan='name=oltp_dw, objective=latency, dbplan=((name=oltpdb, share=80), (name=dwhdb, share=20))';
+-- This sets an IORM plan named 'oltp_dw' with an objective of 'latency' (prioritizing latency over throughput),
+-- and allocates 80% I/O share to 'oltpdb' and 20% to 'dwhdb'.
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This `cellcli` command is used to define or modify an IORM plan. The `objective` can be `latency` (for OLTP) or `throughput` (for DW/reporting). `dbplan` defines the shares for each database. You can also specify `category` plans for different workload types within a database, which ties into Oracle Database Resource Manager.
+                        </p>
+                        <p class="mt-4 text-slate-700">For PDBs, you use `PDBPLAN` instead of `DBPLAN` and specify `pdb_name`. For categories, you define `CATEGORYPLAN` which aligns with `RESOURCE_MANAGER_PLAN` in the database.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor IORM effectiveness?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Monitor `V$CELL_IO_METRIC` and AWR reports. Look for metrics related to `IO_COMPLETION_WAIT_TIME_SM_SEC` and `IO_REQUEST_TOTAL_SM_SEC` per database/PDB, and compare them against their IORM shares.</p>
+                        <pre><code>-- From Database Server:
+SELECT db_name, category_name,
+       SUM(io_completion_wait_time_sm_sec) AS total_wait_time,
+       SUM(io_request_total_sm_sec) AS total_io_requests
+FROM V$CELL_IO_METRIC
+GROUP BY db_name, category_name
+ORDER BY total_wait_time DESC;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This query aggregates I/O completion wait times and total I/O requests by database and category, helping you assess if IORM is effectively prioritizing I/O for different workloads based on the configured plan.
+                        </p>
+                        <p class="mt-4 text-slate-700">AWR reports have an "I/O Resource Manager Statistics" section that provides a historical overview of IORM activity and effectiveness.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Monitoring Tools and Utilities -->
+            <div id="tools" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">7. Monitoring Tools and Utilities</h2>
+                <p class="mb-6 text-slate-600">Beyond AWR and `V$` views, Exadata provides specialized tools for comprehensive performance monitoring and diagnostics across the entire stack.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I use ExaWatcher for performance monitoring?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">ExaWatcher is a comprehensive diagnostic collection tool included with Exadata. It collects OS metrics (CPU, memory, disk I/O, network) and Exadata-specific metrics from both database and storage servers over time.</p>
+                        <pre><code>-- To check ExaWatcher status (as root on any node)
+/opt/oracle.ExaWatcher/ExaWatcher.sh -status
+
+-- To analyze data (e.g., from /opt/oracle.ExaWatcher/output/)
+cd /opt/oracle.ExaWatcher/output/
+python /opt/oracle.ExaWatcher/ExaWatcherCharts.py
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `ExaWatcher.sh -status` checks if the ExaWatcher collection service is running. `ExaWatcherCharts.py` is a Python script that processes the collected data and generates HTML charts, offering a graphical historical view of various system metrics, including specific Exadata components. It's invaluable for post-incident analysis and trend identification.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What does OSWatcher show differently in Exadata environments?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">OSWatcher (OSW) is a general Oracle support tool for collecting OS performance data. In Exadata, it's typically superseded by ExaWatcher, which provides a more comprehensive set of metrics, including Exadata-specific ones (like `cellcli` output, InfiniBand stats, etc.) that OSW does not natively collect.</p>
+                        <p class="mt-2 text-slate-700">If OSW is running in an Exadata environment, it will primarily show standard Linux OS metrics (CPU, memory, disk, network) for the server it's running on, but it won't offer the deep Exadata-specific insights that ExaWatcher provides.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I correlate metrics across compute and storage layers?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Correlating metrics is key to understanding Exadata performance. Use a common timestamp across all collected data. AWR reports automatically correlate some metrics. For deeper correlation, manually align data from:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>Database `V$*` views and AWR (from DB servers).</li>
+                            <li>`cellcli` metrics (from Storage Servers).</li>
+                            <li>ExaWatcher output (from both).</li>
+                            <li>OS-level tools (`top`, `iostat`, `netstat`, `ibstat`) for specific server-level issues.</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">**Example:** If query latency increases (seen in DB AWR), check `V$CELL_IO_METRIC` for corresponding cell CPU spikes or Flash Cache misses, and then `ibstat` for InfiniBand errors during that period.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Performance Tuning Strategies -->
+            <div id="tuning" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">8. Performance Tuning Strategies</h2>
+                <p class="mb-6 text-slate-600">Optimizing performance on Exadata involves leveraging its unique features. This section outlines key strategies to ensure your applications get the most out of the Exadata platform.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I optimize queries for Smart Scan utilization?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Avoid `SELECT *`:** Explicitly list only the columns you need for column projection.</li>
+                            <li>**Simple `WHERE` clauses:** Use pushdown-eligible predicates (equality, ranges, `LIKE` without leading wildcards, `IN` lists). Avoid complex PL/SQL functions or type conversions in predicates.</li>
+                            <li>**Enable Parallelism:** Use `/*+ PARALLEL */` hint for large analytical queries to leverage multiple database and storage server CPUs.</li>
+                            <li>**Keep Statistics Current:** Accurate CBO statistics are crucial for the optimizer to choose Smart Scan.</li>
+                            <li>**Consider HCC:** For analytical tables, use Hybrid Columnar Compression, as Smart Scan works very efficiently with HCC.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What table design considerations improve Exadata performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Partitioning:** Use range or list partitioning for large tables, especially on date or status columns, to enable partition pruning (which reduces the data volume even before Smart Scan).</li>
+                            <li>**Hybrid Columnar Compression (HCC):** Apply appropriate HCC levels (`FOR QUERY` for active DW, `FOR ARCHIVE` for historical) to large, read-intensive tables.</li>
+                            <li>**Small Number of Columns in `SELECT`:** While Exadata handles wide tables well, designing tables with only necessary columns and selecting only those needed improves projection efficiency.</li>
+                        </ul>
+                        <pre><code>-- Example: Create table with HCC for query performance
+CREATE TABLE sales_hcc (
+    sale_id NUMBER,
+    sale_date DATE,
+    product_id NUMBER,
+    region VARCHAR2(50),
+    sales_amount NUMBER(10,2)
+)
+COMPRESS FOR QUERY HIGH;
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This DDL creates a table with `COMPRESS FOR QUERY HIGH` enabled. When queries hit this table, Exadata will use HCC to store the data very compactly and then use Smart Scan to decompress and filter only the necessary columns/rows at the storage layer, leading to significant performance gains for analytical queries.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What indexing strategies work best with Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Continue using B-tree indexes for OLTP workloads:** For highly selective lookups (e.g., primary key lookups), B-tree indexes are still essential as they avoid full scans.</li>
+                            <li>**Leverage Storage Indexes:** These are automatic and need no DDL. Ensure your queries have predicates on columns that exhibit data ordering to maximize their effectiveness.</li>
+                            <li>**Avoid unnecessary indexes:** Indexes consume storage, and their maintenance adds overhead during DML. On Exadata, Smart Scan can often outperform an index scan for large analytical queries, reducing the need for many indexes typically required in traditional DW environments.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Identifying and Resolving Common Performance Issues -->
+            <div id="troubleshooting" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">9. Identifying and Resolving Common Performance Issues</h2>
+                <p class="mb-6 text-slate-600">Even with Exadata's power, performance issues can arise. Knowing how to diagnose and resolve them, leveraging Exadata-specific tools and metrics, is crucial for DBAs.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I diagnose when Smart Scan performance is suboptimal?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Check Execution Plan:** Ensure `TABLE ACCESS STORAGE FULL` or `CELL SMART TABLE SCAN` is present. If not, analyze why (e.g., complex predicates, outdated stats).</li>
+                            <li>**Monitor `cell physical IO interconnect bytes`:** If this is high but the query is still slow, it might indicate issues on the database server (e.g., CPU bound, inefficient join processing).</li>
+                            <li>**Verify Offload Savings:** Check `cell physical IO bytes saved by storage index` and `cell physical IO bytes saved by columnar cache`. Low savings indicate potential issues with data ordering for SI or an inappropriate query for HCC.</li>
+                            <li>**Examine Cell CPU:** If `V$CELL_IO_METRIC` shows high cell CPU utilization, the cells themselves might be saturated.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What causes storage cell performance degradation?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Cell CPU Saturation:** Too many demanding offload operations overloading the cell CPUs.</li>
+                            <li>**Disk I/O Bottlenecks:** Heavy I/O to HDDs, especially if Flash Cache hit ratio is low.</li>
+                            <li>**InfiniBand Issues:** Errors, congestion, or physical problems with the InfiniBand network.</li>
+                            <li>**Misconfigured IORM:** An IORM plan that starves critical workloads or allows low-priority tasks to consume too many resources.</li>
+                            <li>**Faulty Hardware:** Failing disks, flash devices, or network cards on a cell.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I identify and resolve flash cache performance issues?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Low `FC_HIT_RATIO`:** Indicates data isn't being cached effectively or is too large for the cache.</li>
+                            <li>**High `FC_BY_REQ_DR_MISSES_SEC`:** Too many read requests are missing the flash cache and going to disk.</li>
+                            <li>**Resolution:**
+                                <ul class="list-circle list-inside ml-4 mt-1">
+                                    <li>Identify the culprit queries/tables using `V$SEGMENT_STATISTICS` or AWR.</li>
+                                    <li>Consider using `CELLFLASHCACHE KEEP` for critical, repeatedly accessed objects.</li>
+                                    <li>Ensure flash devices are healthy (check `cellcli -e list physicaldisk` for flash disks).</li>
+                                    <li>Review IORM to ensure critical workloads get flash access.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTabId = button.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === targetTabId) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        });
+    });
+
+    // Set initial active tab
+    document.querySelector('.tab-button[data-tab="awr"]').click();
+
+    // Accordion functionality
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('span');
+            
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+
+    // Chart: AWR Comparison
+    const awrCtx = document.getElementById('awrComparisonChart');
+    if (awrCtx) {
+        new Chart(awrCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Total Data Read (GB)', 'Data Transferred to DB Server (GB)'],
+                datasets: [{
+                    label: 'Traditional I/O (Conceptual)',
+                    data: [100, 100], /* 100GB read, 100GB transferred */
+                    backgroundColor: 'rgba(203, 213, 225, 0.7)',
+                    borderColor: 'rgb(100, 116, 139)',
+                    borderWidth: 1
+                }, {
+                    label: 'Exadata Cell Offload (Conceptual)',
+                    data: [100, 10], /* 100GB read by cell, 10GB transferred to DB */
+                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgb(59, 130, 246)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Conceptual I/O Data Flow: Traditional vs. Exadata',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.raw} GB`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Volume (GB)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                           callback: function(value) {
+                                const label = this.getLabelForValue(value);
+                                if (label.length > 16) {
+                                   return label.split(' ').map((word, i, arr) => {
+                                        if (i === 0) return word;
+                                        return word.length > 8 || arr[i-1].length > 8 ? `\n${word}` : ` ${word}`;
+                                    });
+                                }
+                                return label;
+                           }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Chart: Smart Scan Efficiency
+    const ssEfficiencyCtx = document.getElementById('smartScanEfficiencyChart');
+    if (ssEfficiencyCtx) {
+        new Chart(ssEfficiencyCtx, {
+            type: 'line',
+            data: {
+                labels: ['Start', 'Mid-Query', 'End'],
+                datasets: [
+                    {
+                        label: 'Total Data Scanned by Cells (GB)',
+                        data: [0, 500, 1000],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: false,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Data Returned to DB Server (GB)',
+                        data: [0, 10, 20],
+                        borderColor: 'rgb(127, 176, 105)',
+                        backgroundColor: 'rgba(127, 176, 105, 0.2)',
+                        fill: false,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Conceptual Smart Scan Data Reduction Over Time',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.raw} GB`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Volume (GB)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Chart: Flash Cache Usage
+    const fcUsageCtx = document.getElementById('flashCacheUsageChart');
+    if (fcUsageCtx) {
+        new Chart(fcUsageCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Cached Data (Hot)', 'Cached Data (Warm)', 'Evicted Data (Cold)'],
+                datasets: [{
+                    data: [60, 25, 15], /* Conceptual percentages */
+                    backgroundColor: ['#3b82f6', '#93c5fd', '#d1d5db'],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Conceptual Flash Cache Utilization',
+                        font: { size: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.raw + '%';
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+});
+</script>
+
+</body>
+</html>

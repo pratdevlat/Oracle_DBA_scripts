@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exadata Chapter 4: Command-Line Tools & Administration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Professional Tech Blue -->
+    <!-- Application Structure Plan: The SPA is designed with a top-level tabbed navigation, mirroring the structure of the "What I Need to Learn" sections in the report. This allows users to easily navigate between distinct topics (e.g., DCLI, CELLCLI, IORM, Troubleshooting). Within each tab, detailed content is presented using collapsible accordion sections for each sub-question, providing progressive disclosure. This structure prevents information overload and enables users to delve into specific areas of interest at their own pace. The inclusion of conceptual diagrams built with HTML/CSS helps visualize distributed operations like DCLI. -->
+    <!-- Visualization & Content Choices:
+    1. DCLI: Goal: Inform, Organize. Method: Textual explanations, and an HTML/CSS conceptual diagram illustrating DCLI's distributed command execution across multiple nodes.
+    2. Essential DCLI Commands: Goal: Inform, Practical Application. Method: Command blocks with detailed explanations for daily tasks.
+    3. CELLCLI: Goal: Inform, Organize. Method: Textual explanations of the tool's purpose and access methods.
+    4. Storage Cell Administration with CELLCLI: Goal: Inform, Practical Application. Method: Command blocks with detailed explanations for storage-specific tasks.
+    5. Cell Services Management: Goal: Inform. Method: Textual explanations of services and their lifecycle.
+    6. ExaWatcher Log Analysis: Goal: Inform. Method: Textual explanations and command hints for log analysis.
+    7. Performance Testing with CALIBRATE_IO: Goal: Inform, Practical Application. Method: Textual explanation and a SQL command example.
+    8. Cell Alert Monitoring and Management: Goal: Inform, Practical Application. Method: Textual explanations and `cellcli` commands for alert management.
+    9. Diagnostic Data Collection: Goal: Inform. Method: Textual explanation of tools and best practices.
+    10. Safety and Best Practices: Goal: Inform. Method: Textual lists of safety precautions.
+    All choices adhere to the NO SVG/Mermaid constraint and prioritize clarity, practical application (commands), and structured learning for an Oracle DBA.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        .tab-button.active {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .accordion-content.active {
+            max-height: 2000px; /* Adjust as needed for content */
+        }
+        code {
+            display: block;
+            background-color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            margin-top: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .dcli-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .dcli-central-box {
+            background-color: #3b82f6; /* Blue for dcli */
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .dcli-nodes-container {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            width: 100%;
+        }
+        .dcli-node-box {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            width: 120px;
+        }
+        .dcli-arrow {
+            font-size: 1.5rem;
+            color: #9ca3af;
+            transform: rotate(90deg); /* Down arrow */
+        }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-slate-900">Exadata Chapter 4: Command-Line Tools & Administration</h1>
+            <p class="mt-2 text-lg text-slate-600">Essential command-line tools for day-to-day Exadata administration and diagnostics.</p>
+        </header>
+
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 mb-6 overflow-x-auto">
+                <nav class="flex flex-nowrap -mb-px" aria-label="Tabs">
+                    <button class="tab-button whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300 active" data-tab="dcli">DCLI</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="dcli_commands">Essential DCLI Cmds</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cellcli">CELLCLI</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cellcli_admin">Storage Cell Admin</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="cell_services">Cell Services</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="exawatcher_logs">ExaWatcher Logs</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="calibrate_io">CALIBRATE_IO</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="alerts">Cell Alerts</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="diag_data">Diagnostic Data</button>
+                    <button class="tab-button whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm text-slate-500 hover:text-blue-600 hover:border-blue-300" data-tab="safety">Safety & Best Practices</button>
+                </nav>
+            </div>
+
+            <!-- Tab Content: DCLI -->
+            <div id="dcli" class="tab-content active">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">1. DCLI (Distributed Command Line Interface)</h2>
+                <p class="mb-6 text-slate-600">DCLI is a fundamental Exadata tool for executing commands across multiple database servers or storage cells simultaneously. It streamlines cluster-wide operations and greatly enhances efficiency.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is dcli and why is it essential for Exadata administration?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">DCLI (`dcli`) is a utility that allows you to execute shell commands or scripts on a set of remote servers concurrently. It is essential for Exadata because it simplifies managing a cluster of many nodes (database servers and storage cells). Instead of SSH'ing into each server individually, you can issue one `dcli` command to affect all relevant nodes, saving significant time and reducing human error during operations like patching, monitoring, or configuration changes.</p>
+                        <div class="dcli-diagram">
+                            <div class="dcli-central-box">DCLI Command</div>
+                            <div class="dcli-arrow">&#8681;</div>
+                            <div class="dcli-nodes-container">
+                                <div class="dcli-node-box">DB Node 1</div>
+                                <div class="dcli-node-box">DB Node 2</div>
+                                <div class="dcli-node-box">Storage Cell 1</div>
+                                <div class="dcli-node-box">Storage Cell 2</div>
+                            </div>
+                        </div>
+                        <p class="text-center text-sm text-slate-500 italic">DCLI conceptually distributes a single command to multiple target nodes, consolidating the output.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I set up and configure dcli for cluster operations?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">DCLI relies on SSH for secure communication. Key setup steps include:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li><strong>Passwordless SSH:</strong> Configure SSH equivalence (usually using `ssh-keygen` and `ssh-copy-id`) between the source node (where you run `dcli`) and all target nodes. This is typically done for the `root` user and sometimes `oracle` or `grid` user.</li>
+                            <li><strong>Node Lists (Groups):</strong> Create text files containing lists of hostnames/IPs for your database servers (e.g., `/opt/oracle.SupportTools/onecommand/dbs_group`) and storage cells (e.g., `/opt/oracle.SupportTools/onecommand/cell_group`). These files are referenced by `dcli` using the `-g` option.</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">DCLI is usually installed and configured as part of the Exadata deployment, so often you just need to verify passwordless SSH and the group files.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I execute commands across all database servers simultaneously?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use the `-g` option with the database servers group file (e.g., `dbs_group`) and specify the user with `-l`.</p>
+                        <pre><code>-- Example: Check uptime on all database servers as 'root'
+dcli -g dbs_group -l root 'uptime'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command executes `uptime` on every host listed in the `/opt/oracle.SupportTools/onecommand/dbs_group` file, logging in as the `root` user. The output for each host is prefixed with its hostname.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I execute commands across all storage cells simultaneously?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Similar to database servers, but use the storage cells group file (e.g., `cell_group`). You will often use `celladmin` as the login user for `cellcli` commands.</p>
+                        <pre><code>-- Example: List cell status on all storage cells as 'celladmin'
+dcli -g cell_group -l celladmin 'cellcli -e list cell'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This runs `cellcli -e list cell` on each storage cell defined in the `cell_group` file, as the `celladmin` user. This is a common way to get a quick cluster-wide overview of cell health.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Essential DCLI Commands -->
+            <div id="dcli_commands" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">2. Essential DCLI Commands for Daily Operations</h2>
+                <p class="mb-6 text-slate-600">DCLI is invaluable for many routine administrative tasks. Here are some key commands you'll use frequently.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check the status of all nodes in the cluster?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">For database servers, check uptime and general OS health:</p>
+                        <pre><code>dcli -g dbs_group -l root 'uptime'
+dcli -g dbs_group -l root 'free -h'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `uptime` gives system load averages, and `free -h` shows memory usage. Running these cluster-wide provides a quick snapshot of compute node health.
+                        </p>
+                        <p class="mt-4 text-slate-700">For storage cells, specifically check the `cellServicesStatus`:</p>
+                        <pre><code>dcli -g cell_group -l celladmin 'cellcli -e list cell detail | grep cellServicesStatus'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command, as seen in Chapter 1, confirms if the core Exadata cell services (`cellsrv`, `ms`, `rs`) are running on all storage cells.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I collect logs from all nodes efficiently?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">You can use `dcli` to fetch specific log files. For example, to get recent messages from the system log:</p>
+                        <pre><code>dcli -g dbs_group -l root 'tail -n 100 /var/log/messages'
+dcli -g cell_group -l root 'tail -n 100 /var/log/messages'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These commands retrieve the last 100 lines of the system message log from all database servers and storage cells respectively. For larger log files or more complex collection, you might package this into a script and execute the script via `dcli`.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I verify patch levels across the cluster?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use the `imageinfo` utility available on Exadata nodes to check the current image (patch) version.</p>
+                        <pre><code>dcli -g dbs_group -l root 'imageinfo -ver'
+dcli -g cell_group -l root 'imageinfo -ver'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `imageinfo -ver` provides the Exadata software version (image version) installed on each node. This is crucial for verifying consistent patching across the entire Exadata cluster.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: CELLCLI -->
+            <div id="cellcli" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">3. CELLCLI (Cell Command Line Interface)</h2>
+                <p class="mb-6 text-slate-600">CELLCLI is the dedicated command-line interface for administering individual Exadata Storage Servers. It allows you to manage disks, flash, IORM, and cell services.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What is cellcli and how do I access storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">`cellcli` is a powerful utility used to manage Exadata Storage Servers. It allows you to configure storage, monitor performance, and control cell services. You access storage cells by SSH'ing directly to the cell as the `celladmin` user, or by using `dcli` as shown previously.</p>
+                        <pre><code>-- Accessing an individual cell via SSH:
+ssh celladmin@&lt;cell_hostname_or_ip&gt;
+-- Once logged in, you will be in the cellcli prompt or can execute commands directly:
+cellcli -e "list cell"
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This shows the direct way to log into a single storage cell using SSH and then execute a `cellcli` command. The `-e` flag allows you to run a single `cellcli` command without entering the interactive `cellcli` prompt.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I navigate the cellcli command structure and syntax?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">`cellcli` uses an object-oriented command structure: `VERB OBJECT [ATTRIBUTES] [WHERE clause]`. Common verbs include `LIST`, `ALTER`, `CREATE`, `DROP`, `START`, `STOP`. Common objects include `CELL`, `GRIDDISK`, `PHYSICALDISK`, `FLASHCACHE`, `FLASHCACHECONTENT`, `IORMPLAN`, `ALERTDEFINITION`.</p>
+                        <p class="mt-2 text-slate-700">You can enter the `cellcli` prompt by simply typing `cellcli` after SSHing to the cell.</p>
+                        <pre><code>-- Examples of syntax:
+LIST CELL
+ALTER CELL attributes name=new_cell_name
+CREATE GRIDDISK DATA_GD ON CELLDISK 'CD_01_cell01' SIZE 100G
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These examples illustrate the verb-object-attribute syntax. `LIST CELL` gets info about the cell. `ALTER CELL` modifies cell properties. `CREATE GRIDDISK` creates a logical disk from a physical cell disk.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I get help and discover available commands in cellcli?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Once in the `cellcli` prompt, use the `HELP` command:</p>
+                        <pre><code>-- To list all available commands
+HELP
+
+-- To get help on a specific command (e.g., LIST)
+HELP LIST
+
+-- To get help on a specific object (e.g., CELL)
+HELP CELL
+
+-- To get help on a specific attribute of an object (e.g., CELL.name)
+HELP CELL.NAME
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** The `HELP` command is extremely useful for exploring `cellcli`'s capabilities without needing to consult external documentation. It provides syntax, usage, and available attributes for various commands and objects.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Storage Cell Administration with CELLCLI -->
+            <div id="cellcli_admin" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">4. Storage Cell Administration with CELLCLI</h2>
+                <p class="mb-6 text-slate-600">Daily administration tasks often involve using `cellcli` to monitor and manage the storage cells. These commands are essential for ensuring storage health and optimal performance.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check storage cell status and health?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To get a detailed health overview of a cell:</p>
+                        <pre><code>cellcli -e list cell detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command provides a wealth of information about the cell, including its general status, state of services (`cellServicesStatus`), software version, hardware details, and aggregate I/O statistics. Look for `status: online` and `cellServicesStatus: running` to confirm health.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I monitor cell disk status and performance?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To check physical disk status:</p>
+                        <pre><code>cellcli -e list physicaldisk detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This lists all physical disks, their status (e.g., `active`, `failed`), and other attributes. Check for any `failed` or `warning` statuses.
+                        </p>
+                        <p class="mt-4 text-slate-700">For disk I/O performance metrics:</p>
+                        <pre><code>cellcli -e list metriccurrent where objectType='PHYSICALDISK'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This shows current I/O metrics (MB/sec, IOPS) for individual physical disks, helping identify underperforming or heavily utilized drives.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I list and manage flash cache configuration?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To view Flash Cache details:</p>
+                        <pre><code>cellcli -e list flashcache detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command provides information about the Flash Cache, including its size, current usage, and hit ratio.
+                        </p>
+                        <p class="mt-4 text-slate-700">To manage objects in Flash Cache (e.g., `KEEP` a table):</p>
+                        <pre><code>cellcli -e alter cellflashcache object=schema.table_name type=KEEP
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This `cellcli` command explicitly tells the storage cell to attempt to keep blocks belonging to `schema.table_name` in Flash Cache. This is a hint to `cellsrv`, not a guarantee, but can be useful for critical objects.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I view and configure IORM settings from cellcli?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To list the current IORM plan:</p>
+                        <pre><code>cellcli -e list iormplan detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This displays the active IORM plan, showing how I/O resources are prioritized across different databases or PDBs defined in the plan.
+                        </p>
+                        <p class="mt-4 text-slate-700">To modify an IORM plan (as seen in Chapter 3):</p>
+                        <pre><code>cellcli -e alter cell attributes iormPlan='name=my_plan, objective=latency, dbplan=((name=myoltpdb, share=70), (name=myotherdb, share=30))';
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command is used to alter the IORM plan, specifying the objective (e.g., `latency` for OLTP, `throughput` for DW) and the I/O shares for different databases or PDBs.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check storage cell alerts and errors?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To list active alerts on a cell:</p>
+                        <pre><code>cellcli -e list alert
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command displays any active alerts generated by the storage cell, indicating potential hardware or software issues. You should regularly check this.
+                        </p>
+                        <p class="mt-4 text-slate-700">To view alert history:</p>
+                        <pre><code>cellcli -e list alerthistory
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** Shows a historical log of alerts, including those that have been cleared.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I manage cell services (start, stop, restart cellsrv)?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">To restart `cellsrv` (which is often needed after some patches or configuration changes):</p>
+                        <pre><code>cellcli -e alter cell shutdown services cellsrv
+cellcli -e alter cell startup services cellsrv
+-- Or, typically, a single command for restart:
+cellcli -e alter cell restart services cellsrv
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These commands control the `cellsrv` service. `shutdown services cellsrv` gracefully stops the cell server, impacting database I/O to that cell. `startup services cellsrv` starts it back up. `restart services cellsrv` is a convenience command for a graceful stop and start. **Use with caution as it affects active I/O.**
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Cell Services Management -->
+            <div id="cell_services" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">5. Cell Services Management</h2>
+                <p class="mb-6 text-slate-600">The smooth operation of Exadata depends on the health of its core cell services. Understanding their roles and management is key to maintaining system stability and performance.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What are the key cell services and their roles?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**`cellsrv` (Cell Server):** The most critical service. It handles all database I/O, Smart Scan offloading, Flash Cache management, and IORM enforcement.</li>
+                            <li>**`ms` (Management Server):** Manages the configuration of the cell and processes `cellcli` commands. It communicates with the database nodes' ASM instances.</li>
+                            <li>**`rs` (Restart Server):** Monitors `cellsrv` and `ms`. If either fails, `rs` attempts to restart them to ensure high availability.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check the status of cell services?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">As shown before, use `cellcli`:</p>
+                        <pre><code>cellcli -e list cell detail | grep cellServicesStatus
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This command specifically shows the status of `cellsrv`, `ms`, and `rs` (e.g., `running`) on the current cell.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        When and how should I restart cell services?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">You typically restart cell services after:</p>
+                        <ul class="list-disc list-inside mt-2 space-y-1 text-slate-700">
+                            <li>Applying Exadata software patches.</li>
+                            <li>Major configuration changes to the cell.</li>
+                            <li>Troubleshooting certain performance anomalies that might be related to a stuck `cellsrv` process (after other diagnostics).</li>
+                        </ul>
+                        <p class="mt-2 text-slate-700">Use `cellcli -e alter cell restart services cellsrv` for a graceful restart. For other services (`ms`, `rs`), usually a full cell reboot is preferred if they are stuck, as they are less frequently managed individually.</p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What happens when I stop/start cellsrv?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">When `cellsrv` stops, the storage cell becomes temporarily unavailable to the database servers. Database I/O to that cell will hang or fail. In a healthy ASM configuration, I/O will be redirected to redundant copies of data on other cells. When `cellsrv` starts, it registers with ASM on the database servers, and I/O can resume. This causes a brief interruption of I/O to the affected grid disks, but with ASM redundancy, it should not lead to database downtime.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: ExaWatcher Log Analysis -->
+            <div id="exawatcher_logs" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">6. ExaWatcher Log Analysis</h2>
+                <p class="mb-6 text-slate-600">ExaWatcher is a crucial tool for long-term performance data collection. Analyzing its logs helps in historical trend analysis and troubleshooting intermittent issues across the Exadata stack.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I collect ExaWatcher logs effectively?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">ExaWatcher runs automatically and collects data into `/opt/oracle.ExaWatcher/output/`. Data is organized by date. For specific timeframes, you can use the `ExaWatcher.sh -get_all_from_time` utility.</p>
+                        <pre><code>-- To collect all logs for a specific time range (e.g., last 2 hours)
+/opt/oracle.ExaWatcher/ExaWatcher.sh -get_all_from_time 2h
+
+-- To collect for a specific date/time range
+/opt/oracle.ExaWatcher/ExaWatcher.sh -get_all_from_time 2024-01-15T10:00:00 2024-01-15T12:00:00
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These commands create a compressed tarball of ExaWatcher data for the specified period. This is essential for collecting diagnostic data for Oracle Support or for offline analysis.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I analyze ExaWatcher logs for performance problems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">The primary tool for analyzing ExaWatcher data is `ExaWatcherCharts.py`:</p>
+                        <pre><code>cd /opt/oracle.ExaWatcher/output/
+python /opt/oracle.ExaWatcher/ExaWatcherCharts.py
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** This script generates an HTML-based report with graphical charts for various metrics (CPU, memory, network, I/O, InfiniBand errors, `cellcli` metrics, etc.). You can open this HTML file in a web browser to visually identify trends, spikes, or drops in performance across different Exadata components, helping pinpoint the root cause of issues.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Performance Testing with CALIBRATE_IO -->
+            <div id="calibrate_io" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">7. Performance Testing with CALIBRATE_IO</h2>
+                <p class="mb-6 text-slate-600">The `DBMS_RESOURCE_MANAGER.CALIBRATE_IO` utility is a powerful tool to measure the I/O capabilities of your Exadata storage system. It helps establish a baseline and understand the maximum I/O throughput and latency.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I use the calibrate_io utility on Exadata?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">You run `CALIBRATE_IO` from a SQL*Plus session connected to your database. It simulates a heavy I/O workload to determine the maximum IOPS (I/O Operations Per Second) and MBPS (Megabytes Per Second) that your storage can sustain.</p>
+                        <pre><code>-- Example of running CALIBRATE_IO
+DECLARE
+  lat  INTEGER;
+  iops INTEGER;
+  mbps INTEGER;
+BEGIN
+  DBMS_RESOURCE_MANAGER.CALIBRATE_IO(num_physical_disks => NULL, max_latency => 20,
+                                     max_iops => iops, max_mbps => mbps, actual_latency => lat);
+  DBMS_OUTPUT.PUT_LINE('Max IOPS = ' || iops);
+  DBMS_OUTPUT.PUT_LINE('Max MBPS = ' || mbps);
+  DBMS_OUTPUT.PUT_LINE('Actual Latency = ' || lat);
+END;
+/
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `num_physical_disks => NULL` tells Oracle to automatically determine the number of disks to test (or you can specify it). `max_latency` is the target acceptable latency. The procedure returns `max_iops`, `max_mbps`, and `actual_latency` achieved during the test.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How does Exadata calibrate_io differ from standard Oracle?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">On Exadata, `CALIBRATE_IO` can accurately measure the offload capabilities of the storage cells, including the performance benefits of Smart Flash Cache and Flash Log. It interacts with the `cellsrv` process to simulate database I/O, giving a much more representative measure of real-world Exadata I/O capability than it would on generic storage. The results reflect the combined performance of storage, InfiniBand, and cell processing.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Cell Alert Monitoring and Management -->
+            <div id="alerts" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">8. Cell Alert Monitoring and Management</h2>
+                <p class="mb-6 text-slate-600">Proactive monitoring of Exadata Storage Server alerts is crucial for identifying and addressing hardware and software issues before they impact database performance or availability.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I check for current alerts on storage cells?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">Use `cellcli` with the `LIST ALERT` command:</p>
+                        <pre><code>cellcli -e list alert
+-- To see more details for specific alerts:
+cellcli -e list alert detail
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `list alert` shows a summary of currently active alerts on the cell. `list alert detail` provides more verbose information about each alert, including its type, severity, reason, and suggested action. This is the first place to look for cell-related issues.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I clear alerts after resolving issues?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">After resolving the underlying issue that triggered an alert, you can clear it from the `cellcli` interface.</p>
+                        <pre><code>-- Clear a specific alert by ID
+cellcli -e drop alert where alertid='&lt;alert_ID&gt;'
+
+-- Clear all alerts
+cellcli -e drop alert all
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `drop alert` is used to clear alerts. You should only drop alerts after the problem has been fixed and verified. Dropping an alert does not fix the underlying issue. `drop alert all` clears all current alerts, which can be useful after maintenance or for a fresh start, but use carefully.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Diagnostic Data Collection -->
+            <div id="diag_data" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">9. Diagnostic Data Collection</h2>
+                <p class="mb-6 text-slate-600">When encountering complex issues or requiring Oracle Support, collecting comprehensive diagnostic data efficiently is crucial. Exadata provides tools to streamline this process.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I collect comprehensive diagnostic data for Oracle Support?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">The primary utility for comprehensive data collection is `diagcollection.pl`.</p>
+                        <pre><code>-- On a Database Server (as root or grid user)
+/opt/oracle.SupportTools/onecommand/diagcollection.pl -collect -diagDir /tmp/diag_output
+-- This collects database and OS logs from the DB node.
+
+-- On a Storage Cell (as root)
+/opt/oracle.SupportTools/onecommand/diagcollection.pl -collect -diagDir /tmp/diag_output
+-- This collects storage cell and OS logs from the Cell node.
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** `diagcollection.pl` is part of the Exadata OneCommand utilities. The `-collect` option gathers various logs, configurations, and diagnostic information into a single tarball. `-diagDir` specifies the output directory. You typically run this on both database servers and storage cells to get a complete picture.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I use dcli to collect cluster-wide diagnostic information?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <p class="mt-4 text-slate-700">You can use `dcli` to execute `diagcollection.pl` on all nodes. This creates separate diagnostic bundles on each node.</p>
+                        <pre><code>-- On a control node (e.g., dbnode1, as root)
+dcli -g dbs_group -l root '/opt/oracle.SupportTools/onecommand/diagcollection.pl -collect -diagDir /tmp/dcli_diag_db'
+dcli -g cell_group -l root '/opt/oracle.SupportTools/onecommand/diagcollection.pl -collect -diagDir /tmp/dcli_diag_cell'
+</code></pre>
+                        <p class="mt-2 text-sm text-slate-600 italic">
+                            **Explanation:** These commands trigger `diagcollection.pl` execution on all database servers and all storage cells, respectively. After collection, you would then use `dcli` or `scp` to retrieve the generated tarballs from each `/tmp` directory.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Safety and Best Practices -->
+            <div id="safety" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-4 text-slate-800">10. Safety and Best Practices</h2>
+                <p class="mb-6 text-slate-600">Working with powerful command-line tools on an engineered system requires careful attention to safety and adherence to best practices to avoid unintended downtime or data loss.</p>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What safety precautions should I take when using these tools?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Read Documentation:** Always refer to Oracle's official Exadata documentation before executing unfamiliar commands.</li>
+                            <li>**Understand Scope:** Be clear about whether a command affects a single node, a group of nodes, or the entire cluster.</li>
+                            <li>**Test in Lab:** Never execute a new or complex command directly in production without first testing it in a non-production (dev/test/UAT) Exadata environment.</li>
+                            <li>**Verify Prerequisites:** Ensure all prerequisites (e.g., specific software versions, patched states) are met before running maintenance tasks.</li>
+                            <li>**User Privileges:** Use the principle of least privilege. Do not use `root` unless explicitly required.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        How do I avoid accidentally affecting production systems?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Double-Check Hostnames/IPs:** When using `dcli` with specific `-h` or `-c` (for a list of hosts), ensure you are targeting the correct nodes.</li>
+                            <li>**Use `-n` with dcli:** For critical `dcli` commands, use the `-n` (noop/dry-run) option if available to see what would be executed without actually executing it.</li>
+                            <li>**Restrict SSH Access:** Ensure SSH access to production systems is tightly controlled and logged.</li>
+                            <li>**Change Passwordless SSH:** If using passwordless SSH from a jump host, limit the set of target nodes for different environments.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="accordion-item bg-slate-50 rounded-lg mb-3 p-4">
+                    <h3 class="accordion-header cursor-pointer flex justify-between items-center font-semibold text-blue-700">
+                        What backup procedures should I follow before making changes?
+                        <span class="transform transition-transform duration-300">&#9662;</span>
+                    </h3>
+                    <div class="accordion-content">
+                        <ul class="list-disc list-inside mt-4 space-y-1 text-slate-700">
+                            <li>**Database Backup:** Always ensure a recent, successful full database backup (RMAN) is available before any significant Exadata maintenance.</li>
+                            <li>**Cell Configuration Backup:** Before making major `cellcli` changes (e.g., to disk groups, IORM plans), consider using `cellcli -e export cell config` to save the current cell configuration.</li>
+                            <li>**Critical Files Backup:** For OS-level changes, consider backing up critical configuration files (e.g., network settings, SSH configs).</li>
+                            <li>**ExaWatcher Data:** Ensure ExaWatcher is running and healthy to capture performance metrics before and after changes.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetTabId = button.dataset.tab;
+
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            tabContents.forEach(content => {
+                if (content.id === targetTabId) {
+                    content.classList.add('active');
+                } else {
+                    content.classList.remove('active');
+                }
+            });
+        });
+    });
+
+    // Set initial active tab
+    document.querySelector('.tab-button[data-tab="dcli"]').click();
+
+    // Accordion functionality
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('span');
+            
+            content.classList.toggle('active');
+            if (content.classList.contains('active')) {
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                icon.style.transform = 'rotate(0deg)';
+            }
+        });
+    });
+
+});
+</script>
+
+</body>
+</html>
