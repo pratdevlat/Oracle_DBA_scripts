@@ -1,4 +1,4 @@
-Here are dynamic RMAN queries embedded in shell scripts for various scenarios, each configured to use 8 channels for parallelism and designed to be usable across different Linux environments by setting appropriate environment variables.
+
 
 **Important Notes:**
 
