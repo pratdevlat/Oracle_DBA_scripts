@@ -924,4 +924,148 @@ main() {
 # Execute main function with all arguments
 main "$@"
 ```
+### Windows PowerShell Script
+```powershell
+# RMAN Complete Configuration Script for Windows
+# File: rman_config_setup.ps1
+# Usage: .\rman_config_setup.ps1 [-OracleSid PRODDB] [-BackupBase D:\backup\rman] [-FraBase D:\fra]
 
+param(
+    [string]$OracleSid = "PRODDB",
+    [string]$BackupBase = "D:\backup\rman",
+    [string]$FraBase = "D:\fra",
+    [string]$OracleHome = $env:ORACLE_HOME
+)
+
+# Function to write colored output
+function Write-Status {
+    param([string]$Message)
+    Write-Host "[INFO] $Message" -ForegroundColor Green
+}
+
+function Write-Warning {
+    param([string]$Message)
+    Write-Host "[WARNING] $Message" -ForegroundColor Yellow
+}
+
+function Write-Error {
+    param([string]$Message)
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+}
+
+function Write-Section {
+    param([string]$Title)
+    Write-Host "`n==== $Title ====" -ForegroundColor Blue
+}
+
+# Main configuration function
+function Configure-RMAN {
+    Write-Section "Oracle RMAN Configuration Setup"
+    
+    # Set environment variables
+    $env:ORACLE_SID = $OracleSid
+    $env:PATH = "$OracleHome\bin;$env:PATH"
+    
+    Write-Status "Oracle Environment:"
+    Write-Status "ORACLE_HOME: $OracleHome"
+    Write-Status "ORACLE_SID: $OracleSid"
+    Write-Status "BACKUP_BASE: $BackupBase"
+    Write-Status "FRA_BASE: $FraBase"
+    
+    # Create directories
+    Write-Section "Creating Directory Structure"
+    New-Item -ItemType Directory -Force -Path "$BackupBase\datafile" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$BackupBase\archivelog" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$BackupBase\controlfile" | Out-Null
+    New-Item -ItemType Directory -Force -Path "$FraBase" | Out-Null
+    Write-Status "Directories created successfully"
+    
+    # Configure RMAN
+    Write-Section "Configuring RMAN"
+    
+    $rmanScript = @"
+CONNECT TARGET /;
+CONFIGURE DEFAULT DEVICE TYPE TO DISK;
+CONFIGURE CONTROLFILE AUTOBACKUP ON;
+CONFIGURE CONTROLFILE AUTOBACKUP FORMAT FOR DEVICE TYPE DISK TO '$BackupBase\controlfile\cf_%F';
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 7 DAYS;
+CONFIGURE BACKUP OPTIMIZATION ON;
+CONFIGURE COMPRESSION ALGORITHM 'MEDIUM';
+CONFIGURE DEVICE TYPE DISK PARALLELISM 4;
+CONFIGURE CHANNEL DEVICE TYPE DISK MAXPIECESIZE 2G;
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT '$BackupBase\datafile\%U';
+CONFIGURE ARCHIVELOG DELETION POLICY TO BACKED UP 1 TIMES TO DISK;
+SHOW ALL;
+EXIT;
+"@
+    
+    $rmanScript | Out-File -FilePath "$env:TEMP\rman_config.rman" -Encoding ASCII
+    
+    # Execute RMAN configuration
+    $result = Start-Process -FilePath "rman" -ArgumentList "@$env:TEMP\rman_config.rman" -Wait -PassThru -RedirectStandardOutput "$env:TEMP\rman_output.log"
+    
+    if ($result.ExitCode -eq 0) {
+        Write-Status "RMAN configuration completed successfully"
+    } else {
+        Write-Error "RMAN configuration failed"
+        Get-Content "$env:TEMP\rman_output.log"
+        return
+    }
+    
+    # Configure FRA
+    Write-Section "Configuring Fast Recovery Area"
+    
+    $sqlScript = @"
+ALTER SYSTEM SET db_recovery_file_dest_size=50G;
+ALTER SYSTEM SET db_recovery_file_dest='$FraBase';
+EXIT;
+"@
+    
+    $sqlScript | sqlplus "/ as sysdba"
+    
+    # Create backup script
+    Write-Section "Creating Backup Script"
+    
+    $backupScript = @"
+@echo off
+set ORACLE_HOME=$OracleHome
+set ORACLE_SID=$OracleSid
+set PATH=%ORACLE_HOME%\bin;%PATH%
+
+if not exist "$BackupBase\logs" mkdir "$BackupBase\logs"
+
+echo Starting RMAN backup at %date% %time%
+
+rman target / ^<^< EOF
+RUN {
+    BACKUP DATABASE PLUS ARCHIVELOG;
+    DELETE NOPROMPT OBSOLETE;
+    DELETE NOPROMPT EXPIRED BACKUP;
+    DELETE NOPROMPT EXPIRED ARCHIVELOG ALL;
+}
+EXIT;
+EOF
+
+echo RMAN backup completed at %date% %time%
+"@
+    
+    $backupScript | Out-File -FilePath "$BackupBase\rman_backup.bat" -Encoding ASCII
+    
+    Write-Status "Configuration completed successfully!"
+    Write-Status "Backup script created: $BackupBase\rman_backup.bat"
+    
+    # Cleanup
+    Remove-Item "$env:TEMP\rman_config.rman" -ErrorAction SilentlyContinue
+    Remove-Item "$env:TEMP\rman_output.log" -ErrorAction SilentlyContinue
+}
+
+# Execute configuration
+Configure-RMAN
+```
+
+---
+
+**Note**: 
+- **Linux/Unix Script**: Save as `rman_config_setup.sh`, make executable with `chmod +x rman_config_setup.sh`
+- **Windows Script**: Save as `rman_config_setup.ps1`, run with PowerShell execution policy set appropriately
+- Both scripts are fully automated and include error handling, logging, and operational script generation
