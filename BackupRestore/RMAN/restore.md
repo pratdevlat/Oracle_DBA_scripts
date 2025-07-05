@@ -1,14 +1,4 @@
-You're right to prioritize robust error handling and clear separation of concerns in your RMAN scripts. I've updated the scripts to include better error handling and, as requested, separated the standby creation into two distinct scripts based on whether you're performing an active duplication (with production service) or a backup-based duplication (relying on existing backups).
 
-**Key Error Handling Enhancements Added:**
-
-  * `set -e`: This is added at the beginning of each script. It ensures that the script will exit immediately if any command fails (returns a non-zero exit status). This prevents subsequent commands from running in an unexpected state.
-  * **Environment Variable Checks:** Basic checks are added to ensure `ORACLE_HOME` and `ORACLE_SID` (and others as relevant) are set.
-  * **Directory Creation Checks:** Improved checks for `mkdir -p` commands.
-  * **SQL\*Plus and RMAN Exit Code Checks:** Explicit `if [ $? -ne 0 ]` blocks after critical SQL\*Plus and RMAN commands.
-  * **Clearer Logging:** Enhanced `echo` statements to indicate the status of each major step.
-
------
 
 ### 1\. RMAN Duplicate to Migrate Database (Enhanced Error Handling)
 
