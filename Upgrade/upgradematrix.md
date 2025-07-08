@@ -726,10 +726,107 @@ SELECT version FROM v$timezone_file;
 ### Oracle 18c Requirements
 
 **Operating System Support:**
-- Linux: RHEL 6/7/8, SUSE 12/15, Oracle Linux 6/7/8
-- Windows: 2012, 2012R2, 2016, 2019
-- Solaris: 11.4+
-- AIX: 7.1, 7.2
+
+**RHEL/Oracle Linux:**
+- RHEL 6 (Update 8+), RHEL 7 (all updates), RHEL 8
+- Oracle Linux 6 (Update 8+), Oracle Linux 7, Oracle Linux 8
+
+**SUSE Linux:**
+- SUSE 12 SP3+, SUSE 15
+
+**Windows:**
+- Windows Server 2012 R2
+- Windows Server 2016
+- Windows Server 2019
+
+**AIX:**
+- AIX 7.1 (TL 4+)
+- AIX 7.2 (all TLs)
+
+**Solaris:**
+- Solaris 11.4+
+
+**Linux Package Requirements:**
+```bash
+# RHEL/Oracle Linux 7 packages for 18c
+bc-1.06.95
+binutils-2.27
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-4.8.5
+gcc-c++-4.8.5
+glibc-2.17
+glibc-devel-2.17
+ksh-20120801
+libaio-0.3.109
+libaio-devel-0.3.109
+libgcc-4.8.5
+libstdc++-4.8.5
+libstdc++-devel-4.8.5
+libXi-1.7.4
+libXtst-1.2.2
+make-3.82
+nfs-utils-1.3.0
+net-tools-2.0
+smartmontools-6.2
+sysstat-10.1.5
+xdpyinfo-1.3.2
+
+# RHEL/Oracle Linux 8 packages for 18c
+bc-1.07.1
+binutils-2.30
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-8.2.1
+gcc-c++-8.2.1
+glibc-2.28
+glibc-devel-2.28
+ksh-20120801
+libaio-0.3.112
+libaio-devel-0.3.112
+libgcc-8.2.1
+libstdc++-8.2.1
+libstdc++-devel-8.2.1
+libXi-1.7.9
+libXtst-1.2.3
+make-4.2.1
+nfs-utils-2.3.3
+net-tools-2.0
+smartmontools-6.6
+sysstat-11.7.3
+xdpyinfo-1.3.2
+
+# Installation for RHEL 8
+dnf install bc binutils compat-libcap1 compat-libstdc++-33 \
+    gcc gcc-c++ glibc glibc-devel ksh libaio libaio-devel \
+    libgcc libstdc++ libstdc++-devel libXi libXtst make \
+    nfs-utils net-tools smartmontools sysstat xdpyinfo
+
+# Additional packages for Oracle 18c
+dnf install libnsl libnsl.i686 libnsl2 libnsl2.i686
+
+# Kernel parameters for 18c
+cat >> /etc/sysctl.conf << 'EOF'
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2097152
+kernel.shmmax = 4398046511104
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+kernel.panic_on_oops = 1
+vm.swappiness = 1
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 80
+vm.dirty_expire_centisecs = 500
+vm.dirty_writeback_centisecs = 100
+EOF
+sysctl -p
+```
 
 **Hardware Requirements:**
 ```bash
@@ -739,6 +836,417 @@ Disk Space: 8.5 GB for software
 Swap: Equal to RAM (between 1-16 GB)
 CPU: 1 GHz 64-bit processor
 Temp Space: 1 GB in /tmp
+```
+
+### Oracle 19c Requirements
+
+**Operating System Support:**
+
+**RHEL/Oracle Linux:**
+- RHEL 6 (Update 10+), RHEL 7 (all updates), RHEL 8, RHEL 9
+- Oracle Linux 6 (Update 10+), Oracle Linux 7, Oracle Linux 8, Oracle Linux 9
+
+**SUSE Linux:**
+- SUSE 12 SP4+, SUSE 15 SP1+
+
+**Windows:**
+- Windows Server 2012 R2
+- Windows Server 2016
+- Windows Server 2019
+- Windows Server 2022
+
+**AIX:**
+- AIX 7.1 (TL 5+)
+- AIX 7.2 (all TLs)
+- AIX 7.3
+
+**Solaris:**
+- Solaris 11.4+
+
+**Linux Package Requirements:**
+```bash
+# RHEL/Oracle Linux 8 packages for 19c
+bc-1.07.1
+binutils-2.30
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-8.3.1
+gcc-c++-8.3.1
+glibc-2.28
+glibc-devel-2.28
+ksh-20120801
+libaio-0.3.112
+libaio-devel-0.3.112
+libgcc-8.3.1
+libstdc++-8.3.1
+libstdc++-devel-8.3.1
+libXi-1.7.9
+libXtst-1.2.3
+make-4.2.1
+nfs-utils-2.3.3
+net-tools-2.0
+smartmontools-6.6
+sysstat-11.7.3
+xdpyinfo-1.3.2
+
+# RHEL/Oracle Linux 9 packages for 19c
+bc-1.07.1
+binutils-2.35.2
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-11.2.1
+gcc-c++-11.2.1
+glibc-2.34
+glibc-devel-2.34
+ksh-20120801
+libaio-0.3.111
+libaio-devel-0.3.111
+libgcc-11.2.1
+libstdc++-11.2.1
+libstdc++-devel-11.2.1
+libXi-1.7.10
+libXtst-1.2.3
+make-4.3
+nfs-utils-2.5.4
+net-tools-2.0
+smartmontools-7.2
+sysstat-12.5.4
+xdpyinfo-1.3.2
+
+# Installation for RHEL 9
+dnf install bc binutils compat-libcap1 compat-libstdc++-33 \
+    gcc gcc-c++ glibc glibc-devel ksh libaio libaio-devel \
+    libgcc libstdc++ libstdc++-devel libXi libXtst make \
+    nfs-utils net-tools smartmontools sysstat xdpyinfo \
+    libnsl libnsl.i686 libnsl2 libnsl2.i686
+
+# Additional packages for 19c features
+dnf install policycoreutils-python-utils
+
+# Kernel parameters for 19c
+cat >> /etc/sysctl.conf << 'EOF'
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2097152
+kernel.shmmax = 4398046511104
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+kernel.panic_on_oops = 1
+vm.swappiness = 1
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 80
+vm.dirty_expire_centisecs = 500
+vm.dirty_writeback_centisecs = 100
+net.ipv4.conf.all.rp_filter = 2
+net.ipv4.conf.default.rp_filter = 2
+EOF
+sysctl -p
+```
+
+**Hardware Requirements:**
+```bash
+# Minimum Requirements
+RAM: 2 GB (8 GB recommended)
+Disk Space: 9.5 GB for software
+Swap: Equal to RAM (between 1-16 GB)
+CPU: 1 GHz 64-bit processor
+Temp Space: 1 GB in /tmp
+```
+
+### Oracle 21c Requirements
+
+**Operating System Support:**
+
+**RHEL/Oracle Linux:**
+- RHEL 7 (Update 6+), RHEL 8, RHEL 9
+- Oracle Linux 7 (Update 6+), Oracle Linux 8, Oracle Linux 9
+
+**SUSE Linux:**
+- SUSE 12 SP5+, SUSE 15 SP2+
+
+**Windows:**
+- Windows Server 2016
+- Windows Server 2019
+- Windows Server 2022
+
+**AIX:**
+- AIX 7.2 (TL 3+)
+- AIX 7.3
+
+**Solaris:**
+- Solaris 11.4+
+
+**Linux Package Requirements:**
+```bash
+# RHEL/Oracle Linux 8 packages for 21c
+bc-1.07.1
+binutils-2.30
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-8.5.0
+gcc-c++-8.5.0
+glibc-2.28
+glibc-devel-2.28
+ksh-20120801
+libaio-0.3.112
+libaio-devel-0.3.112
+libgcc-8.5.0
+libstdc++-8.5.0
+libstdc++-devel-8.5.0
+libXi-1.7.10
+libXtst-1.2.3
+make-4.2.1
+nfs-utils-2.3.3
+net-tools-2.0
+smartmontools-7.1
+sysstat-11.7.3
+xdpyinfo-1.3.2
+
+# Installation for RHEL 8 (21c)
+dnf install bc binutils compat-libcap1 compat-libstdc++-33 \
+    gcc gcc-c++ glibc glibc-devel ksh libaio libaio-devel \
+    libgcc libstdc++ libstdc++-devel libXi libXtst make \
+    nfs-utils net-tools smartmontools sysstat xdpyinfo \
+    libnsl libnsl.i686 libnsl2 libnsl2.i686
+
+# Kernel parameters for 21c (same as 19c)
+cat >> /etc/sysctl.conf << 'EOF'
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2097152
+kernel.shmmax = 4398046511104
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+kernel.panic_on_oops = 1
+vm.swappiness = 1
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 80
+EOF
+sysctl -p
+```
+
+**Hardware Requirements:**
+```bash
+# Minimum Requirements
+RAM: 2 GB (8 GB recommended)
+Disk Space: 10.7 GB for software
+Swap: Equal to RAM (between 1-16 GB)
+CPU: 1 GHz 64-bit processor
+Temp Space: 1 GB in /tmp
+```
+
+### Oracle 23ai Requirements
+
+**Operating System Support:**
+
+**RHEL/Oracle Linux:**
+- RHEL 8 (Update 4+), RHEL 9
+- Oracle Linux 8 (Update 4+), Oracle Linux 9
+
+**SUSE Linux:**
+- SUSE 15 SP3+
+
+**Ubuntu:**
+- Ubuntu 20.04 LTS
+- Ubuntu 22.04 LTS
+
+**Windows:**
+- Windows Server 2019
+- Windows Server 2022
+
+**Cloud Platforms:**
+- Oracle Cloud Infrastructure (OCI)
+- Amazon Web Services (AWS)
+- Microsoft Azure
+- Google Cloud Platform (GCP)
+
+**Linux Package Requirements:**
+```bash
+# RHEL/Oracle Linux 8/9 packages for 23ai
+bc-1.07.1
+binutils-2.35
+compat-libcap1-1.10
+compat-libstdc++-33-3.2.3
+gcc-11.3.1
+gcc-c++-11.3.1
+glibc-2.34
+glibc-devel-2.34
+ksh-20120801
+libaio-0.3.111
+libaio-devel-0.3.111
+libgcc-11.3.1
+libstdc++-11.3.1
+libstdc++-devel-11.3.1
+libXi-1.7.10
+libXtst-1.2.3
+make-4.3
+nfs-utils-2.5.4
+net-tools-2.0
+smartmontools-7.3
+sysstat-12.5.4
+xdpyinfo-1.3.2
+
+# Ubuntu packages for 23ai
+apt-get update
+apt-get install -y bc binutils build-essential gcc g++ \
+    libc6-dev ksh libaio1 libaio-dev libgcc-s1 libstdc++6 \
+    libstdc++-11-dev libxi6 libxtst6 make nfs-common \
+    net-tools smartmontools sysstat x11-utils
+
+# Installation for RHEL 9 (23ai)
+dnf install bc binutils compat-libcap1 compat-libstdc++-33 \
+    gcc gcc-c++ glibc glibc-devel ksh libaio libaio-devel \
+    libgcc libstdc++ libstdc++-devel libXi libXtst make \
+    nfs-utils net-tools smartmontools sysstat xdpyinfo \
+    libnsl libnsl.i686 libnsl2 libnsl2.i686
+
+# AI-specific packages
+dnf install python3 python3-pip python3-devel
+pip3 install numpy pandas scikit-learn
+
+# Kernel parameters for 23ai
+cat >> /etc/sysctl.conf << 'EOF'
+fs.aio-max-nr = 1048576
+fs.file-max = 6815744
+kernel.shmall = 2097152
+kernel.shmmax = 4398046511104
+kernel.shmmni = 4096
+kernel.sem = 250 32000 100 128
+net.ipv4.ip_local_port_range = 9000 65500
+net.core.rmem_default = 262144
+net.core.rmem_max = 4194304
+net.core.wmem_default = 262144
+net.core.wmem_max = 1048576
+kernel.panic_on_oops = 1
+vm.swappiness = 1
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 80
+# AI workload optimizations
+vm.nr_hugepages = 1024
+kernel.numa_balancing = 0
+EOF
+sysctl -p
+
+# Security limits for 23ai
+cat >> /etc/security/limits.conf << 'EOF'
+oracle soft nofile 1024
+oracle hard nofile 65536
+oracle soft nproc 2047
+oracle hard nproc 16384
+oracle soft stack 10240
+oracle hard stack 32768
+oracle soft memlock 134217728
+oracle hard memlock 134217728
+# AI workload limits
+oracle soft as unlimited
+oracle hard as unlimited
+EOF
+```
+
+**Hardware Requirements:**
+```bash
+# Minimum Requirements
+RAM: 4 GB (16 GB recommended for AI features)
+Disk Space: 12.8 GB for software
+Swap: Equal to RAM (between 1-32 GB)
+CPU: 2 GHz 64-bit processor (multi-core recommended)
+Temp Space: 2 GB in /tmp
+# For AI features: GPU support recommended
+```
+
+## Platform-Specific Package Commands
+
+### AIX Package Requirements
+```bash
+# AIX 7.1/7.2/7.3 filesets
+bos.adt.base
+bos.adt.lib
+bos.adt.libm
+bos.perf.libperfstat
+bos.perf.perfstat
+bos.perf.proctools
+rsct.basic.hacmp
+rsct.compat.basic.hacmp
+xlC.aix61.rte
+xlC.rte
+
+# Check AIX packages
+lslpp -l | grep -E "(xlC|bos\.adt)"
+
+# Install missing packages
+smitty install_software
+```
+
+### Windows Requirements
+```cmd
+# Windows components check
+dism /online /get-features | findstr -i "NetFx"
+dism /online /get-features | findstr -i "IIS"
+
+# Required Windows features
+.NET Framework 4.7.2 or higher
+Microsoft Visual C++ 2017 Redistributable
+Windows PowerShell 5.1 or higher
+
+# PowerShell verification
+$PSVersionTable.PSVersion
+```
+
+### Solaris Package Requirements
+```bash
+# Solaris 11.4+ packages
+pkg list gcc
+pkg list system/header
+pkg list system/library/math
+pkg list system/library/c++/sunpro
+
+# Install required packages
+pkg install gcc-7
+pkg install system/header
+pkg install developer/build/make
+```
+
+## Cross-Platform Validation Script
+```bash
+#!/bin/bash
+# Platform detection and package validation
+
+OS=$(uname -s)
+case $OS in
+  Linux)
+    if [ -f /etc/redhat-release ]; then
+      echo "RHEL/Oracle Linux detected"
+      rpm -qa | grep -E "(gcc|glibc|libaio|binutils)"
+    elif [ -f /etc/SuSE-release ]; then
+      echo "SUSE detected"
+      zypper search --installed-only gcc glibc libaio
+    elif [ -f /etc/lsb-release ]; then
+      echo "Ubuntu detected"
+      dpkg -l | grep -E "(gcc|libc6|libaio)"
+    fi
+    ;;
+  AIX)
+    echo "AIX detected"
+    lslpp -l | grep -E "(xlC|bos\.adt)"
+    ;;
+  SunOS)
+    echo "Solaris detected"
+    pkg list | grep -E "(gcc|system/library)"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    ;;
+esac
 ```
 
 **Pre-Upgrade Checks:**
@@ -801,6 +1309,222 @@ SELECT banner FROM v$version;
 SELECT cdb, con_dbid FROM v$database;
 ```
 
+### Oracle 23ai Requirements
+
+**Operating System Support:**
+- Linux: RHEL 8/9, SUSE 15, Oracle Linux 8/9, Ubuntu 20.04/22.04
+- Windows: 2019, 2022
+- Cloud: OCI, AWS, Azure, GCP
+
+**Hardware Requirements:**
+```bash
+# Minimum Requirements
+RAM: 4 GB (16 GB recommended)
+Disk Space: 12.8 GB for software
+Swap: Equal to RAM (between 1-32 GB)
+CPU: 2 GHz 64-bit processor
+Temp Space: 2 GB in /tmp
+```
+
+**Pre-Upgrade Checks:**
+```sql
+-- Latest patches recommended
+SELECT banner FROM v$version;
+-- Check AI features compatibility
+SELECT name, value FROM v$parameter WHERE name LIKE '%ai%';
+-- Verify JSON capabilities
+SELECT banner FROM v$version WHERE banner LIKE '%JSON%';
+```
+
+## Version Compatibility Matrix
+
+```sql
+-- Check compatibility before upgrade
+SELECT 
+    CASE 
+        WHEN SUBSTR(banner,1,INSTR(banner,' ')-1) = 'Oracle' THEN
+            SUBSTR(banner,INSTR(banner,'Release')+8,10)
+        ELSE 'Unknown'
+    END as current_version
+FROM v$version WHERE banner LIKE 'Oracle%';
+
+-- Memory requirements check
+SELECT 
+    ROUND(value/1024/1024/1024,2) as sga_gb,
+    ROUND((SELECT value FROM v$parameter WHERE name = 'pga_aggregate_target')/1024/1024/1024,2) as pga_gb
+FROM v$parameter WHERE name = 'sga_target';
+```
+
+## Minimum Version Requirements for Direct Upgrades
+
+| Source | Target | Minimum Source Version | Notes |
+|--------|--------|----------------------|-------|
+| 10.1.x | 11.2.x | 10.1.0.5 | Must apply patches |
+| 10.2.x | 11.2.x | 10.2.0.4 | Must apply patches |
+| 11.1.x | 12.1.x | 11.1.0.7 | Critical patches required |
+| 11.1.x | 12.2.x | 11.1.0.7 | Critical patches required |
+| 11.2.x | 12.1.x | 11.2.0.2 | Timezone updates needed |
+| 11.2.x | 12.2.x | 11.2.0.2 | Timezone updates needed |
+| 11.2.x | 18c | 11.2.0.2 | Latest patches recommended |
+| 11.2.x | 19c | 11.2.0.2 | Latest patches recommended |
+| 12.1.x | 12.2.x | 12.1.0.2 | Apply latest PSUs |
+| 12.1.x | 18c | 12.1.0.2 | Apply latest PSUs |
+| 12.1.x | 19c | 12.1.0.2 | Apply latest PSUs |
+| 12.1.x | 21c | 12.1.0.2 | Apply latest PSUs |
+| 12.2.x | 18c | 12.2.0.1 | Apply latest PSUs |
+| 12.2.x | 19c | 12.2.0.1 | Apply latest PSUs |
+| 12.2.x | 21c | 12.2.0.1 | Apply latest PSUs |
+| 12.2.x | 23ai | 12.2.0.1 | Latest patches required |
+| 18c | 19c | 18.3.0.0 | Any version |
+| 18c | 21c | 18.3.0.0 | Any version |
+| 18c | 23ai | 18.3.0.0 | Latest patches recommended |
+| 19c | 21c | 19.3.0.0 | Any version |
+| 19c | 23ai | 19.3.0.0 | Latest patches recommended |
+| 21c | 23ai | 21.3.0.0 | Any version |
+
+## Recommended Upgrade Paths
+
+### Path 1: Conservative (Minimal Risk)
+```
+10.x → 11.2.0.4 → 12.2.0.1 → 19c → 23ai
+```
+
+### Path 2: Balanced (Recommended)
+```
+10.x → 11.2.0.4 → 19c → 23ai
+11.x → 12.2.0.1 → 19c → 23ai
+12.x → 19c → 23ai
+```
+
+### Path 3: Aggressive (Fastest)
+```
+11.2.0.x → 19c → 23ai
+12.2.0.x → 23ai (direct)
+18c/19c → 23ai (direct)
+```
+
+## Upgrade Methods by Version
+
+### DBUA (Database Upgrade Assistant)
+```bash
+# Available for all supported direct upgrades
+dbua -silent -responseFile /path/to/response.rsp
+```
+
+### Manual Upgrade Scripts
+```sql
+-- Pre-12c
+@$ORACLE_HOME/rdbms/admin/catupgrd.sql
+
+-- 12c and later
+@$ORACLE_HOME/rdbms/admin/catctl.pl catupgrd.sql
+```
+
+### AutoUpgrade (19c and later)
+```bash
+# Available for upgrades to 19c, 21c, 23ai
+java -jar autoupgrade.jar -config config.cfg -mode analyze
+java -jar autoupgrade.jar -config config.cfg -mode deploy
+```
+
+## Platform-Specific Considerations
+
+### Linux/Unix
+```bash
+# Check compatibility
+./runInstaller -executePrereqs -silent
+```
+
+### Windows
+```cmd
+# Check compatibility
+setup.exe -executePrereqs -silent
+```
+
+### Cloud Platforms
+```bash
+# OCI - Use cloud-specific tools
+oci db system upgrade
+```
+
+## Pre-Upgrade Checks by Version
+
+### 10g to 11g
+```sql
+@$ORACLE_HOME/rdbms/admin/utlu111i.sql
+```
+
+### 11g to 12c
+```sql
+@$ORACLE_HOME/rdbms/admin/utlu121i.sql
+```
+
+### 12c to 18c/19c
+```sql
+@$ORACLE_HOME/rdbms/admin/utlu122i.sql
+```
+
+### 18c/19c to 21c/23ai
+```sql
+@$ORACLE_HOME/rdbms/admin/utlu122i.sql
+```
+
+## Unsupported Direct Upgrades
+
+### Cannot Skip More Than 2 Major Versions
+```
+❌ 10.x → 18c/19c/21c/23ai (skip 11g, 12c)
+❌ 11.x → 21c/23ai (skip 12c, 18c/19c)
+❌ 12.1.x → 23ai (skip 18c/19c, 21c)
+```
+
+### Deprecated Versions
+```
+❌ 9i → Any version (End of support)
+❌ 8i → Any version (End of support)
+```
+
+## Quick Decision Matrix
+
+| Current Version | Target: 19c | Target: 21c | Target: 23ai |
+|----------------|------------|------------|-------------|
+| **10.1.x** | Via 11.2 | Via 11.2→19c | Via 11.2→19c |
+| **10.2.x** | Via 11.2 | Via 11.2→19c | Via 11.2→19c |
+| **11.1.x** | Via 12.2 | Via 12.2→19c | Via 12.2→19c |
+| **11.2.x** | ✅ Direct | Via 19c | Via 19c |
+| **12.1.x** | ✅ Direct | ✅ Direct | Via 19c |
+| **12.2.x** | ✅ Direct | ✅ Direct | ✅ Direct |
+| **18c** | ✅ Direct | ✅ Direct | ✅ Direct |
+| **19c** | N/A | ✅ Direct | ✅ Direct |
+| **21c** | N/A | N/A | ✅ Direct |
+
+## Commands for Version Check
+
+```sql
+-- Check current version
+SELECT banner FROM v$version;
+
+-- Check compatibility
+SELECT name, value FROM v$parameter WHERE name = 'compatible';
+
+-- Check component versions
+SELECT comp_name, version, status FROM dba_registry;
+
+-- Check patch level
+SELECT patch_id, patch_uid, version, action, status, description 
+FROM dba_registry_sqlpatch ORDER BY action_time DESC;
+```
+
+## Upgrade Time Estimates
+
+| Database Size | 10g→11g | 11g→12c | 12c→19c | 19c→23ai |
+|--------------|---------|---------|---------|----------|
+| < 100GB | 2-4 hrs | 3-6 hrs | 2-4 hrs | 2-4 hrs |
+| 100GB-1TB | 4-8 hrs | 6-12 hrs | 4-8 hrs | 4-8 hrs |
+| 1TB-10TB | 8-16 hrs | 12-24 hrs | 8-16 hrs | 8-16 hrs |
+| > 10TB | 16+ hrs | 24+ hrs | 16+ hrs | 16+ hrs |
+
+*Times include backup, upgrade, and validation phases*
 ### Oracle 23ai Requirements
 
 **Operating System Support:**
