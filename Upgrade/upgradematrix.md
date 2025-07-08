@@ -1,12 +1,4 @@
-### Oracle 18c Requirements
-
-**Operating System Support:**
-
-**RHEL/Oracle Linux:**
-- RHEL 6 (Update 8+), RHEL 7 (all updates), RHEL 8
-- Oracle Linux 6 (Update 8+), Oracle Linux 7, Oracle Linux 8
-
-**# Oracle Database Upgrade Matrix: 10g to 23ai
+###  Oracle Database Upgrade Matrix: 10g to 23ai
 
 ## Direct Upgrade Paths Matrix
 
