@@ -1,8 +1,13 @@
 #!/bin/bash
-# Database Archive Cleanup Script
-# Deletes database archive files older than 10 days
+
+# RMAN Archive Cleanup Script
+
+# Deletes database archive logs older than 10 days using RMAN
+
 # Author: Generated Script
+
 # Date: $(date +%Y-%m-%d)
+
 # Set colors for output
 
 RED=’\033[0;31m’
@@ -11,11 +16,21 @@ YELLOW=’\033[1;33m’
 BLUE=’\033[0;34m’
 NC=’\033[0m’ # No Color
 
+# Default values
+
+ORACLE_HOME=${ORACLE_HOME:-”/u01/app/oracle/product/19.0.0/dbhome_1”}
+ORACLE_SID=””
+DAYS_OLD=10
+DRY_RUN=false
+LOG_FILE=””
+RMAN_USER=”/”
+RMAN_CATALOG=””
+
 # Function to display header
 
 show_header() {
 echo -e “${BLUE}==================================”
-echo -e “  Database Archive Cleanup Tool”
+echo -e “  RMAN Archive Cleanup Tool”
 echo -e “==================================”
 echo -e “${NC}”
 }
@@ -60,13 +75,68 @@ if [[ -z "$db_name" ]]; then
     return 1
 fi
 
-# Check for valid characters (alphanumeric, underscore, hyphen)
-if [[ ! "$db_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-    log_message "ERROR" "Database name contains invalid characters. Use only letters, numbers, underscore, and hyphen."
+# Check for valid characters (alphanumeric, underscore)
+if [[ ! "$db_name" =~ ^[a-zA-Z0-9_]+$ ]]; then
+    log_message "ERROR" "Database name contains invalid characters. Use only letters, numbers, and underscore."
     return 1
 fi
 
 return 0
+```
+
+}
+
+# Function to check Oracle environment
+
+check_oracle_env() {
+log_message “INFO” “Checking Oracle environment…”
+
+```
+# Check ORACLE_HOME
+if [[ ! -d "$ORACLE_HOME" ]]; then
+    log_message "ERROR" "ORACLE_HOME directory does not exist: $ORACLE_HOME"
+    return 1
+fi
+
+# Check if RMAN executable exists
+if [[ ! -x "$ORACLE_HOME/bin/rman" ]]; then
+    log_message "ERROR" "RMAN executable not found: $ORACLE_HOME/bin/rman"
+    return 1
+fi
+
+# Check if sqlplus exists
+if [[ ! -x "$ORACLE_HOME/bin/sqlplus" ]]; then
+    log_message "ERROR" "SQL*Plus executable not found: $ORACLE_HOME/bin/sqlplus"
+    return 1
+fi
+
+log_message "INFO" "Oracle environment check passed"
+return 0
+```
+
+}
+
+# Function to test database connection
+
+test_db_connection() {
+local db_name=$1
+
+```
+log_message "INFO" "Testing database connection to $db_name..."
+
+export ORACLE_SID=$db_name
+
+# Test connection using sqlplus
+local test_result=$(echo "SELECT 'CONNECTION_OK' FROM DUAL;" | $ORACLE_HOME/bin/sqlplus -s / as sysdba 2>&1)
+
+if [[ $test_result == *"CONNECTION_OK"* ]]; then
+    log_message "INFO" "Database connection successful"
+    return 0
+else
+    log_message "ERROR" "Failed to connect to database $db_name"
+    log_message "ERROR" "Connection error: $test_result"
+    return 1
+fi
 ```
 
 }
@@ -98,102 +168,197 @@ done
 
 }
 
-# Function to find and delete archive files
+# Function to generate RMAN script
 
-cleanup_archives() {
+generate_rman_script() {
 local db_name=$1
-local archive_dir=$2
-local days_old=${3:-10}
-local dry_run=${4:-false}
+local days_old=$2
+local dry_run=$3
+local script_file=”/tmp/rman_cleanup_${db_name}_$$.rman”
 
 ```
-log_message "INFO" "Starting cleanup for database: $db_name"
-log_message "INFO" "Archive directory: $archive_dir"
-log_message "INFO" "Deleting files older than: $days_old days"
+cat > "$script_file" <<EOF
+```
 
-# Common archive file patterns
-local patterns=(
-    "${db_name}*.sql"
-    "${db_name}*.sql.gz"
-    "${db_name}*.sql.bz2"
-    "${db_name}*.dump"
-    "${db_name}*.backup"
-    "${db_name}*.bak"
-    "${db_name}*.tar"
-    "${db_name}*.tar.gz"
-    "${db_name}*.tar.bz2"
-    "${db_name}*.zip"
-)
+CONNECT TARGET ${RMAN_USER};
+$(if [[ -n “$RMAN_CATALOG” ]]; then echo “CONNECT CATALOG ${RMAN_CATALOG};”; fi)
 
-local total_files=0
-local deleted_files=0
-local total_size=0
-local freed_size=0
+# Show current archivelog information
 
-# Check if archive directory exists
-if [[ ! -d "$archive_dir" ]]; then
-    log_message "ERROR" "Archive directory does not exist: $archive_dir"
-    return 1
-fi
+LIST ARCHIVELOG ALL;
 
-# Find and process files
-for pattern in "${patterns[@]}"; do
-    while IFS= read -r -d '' file; do
-        if [[ -f "$file" ]]; then
-            ((total_files++))
-            local file_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
-            ((total_size += file_size))
-            
-            # Check if file is older than specified days
-            if find "$file" -type f -mtime +$days_old -print0 | grep -qz .; then
-                log_message "INFO" "Found old archive: $(basename "$file") ($(date -r "$file" '+%Y-%m-%d %H:%M:%S'))"
-                
-                if [[ "$dry_run" == "true" ]]; then
-                    log_message "INFO" "[DRY RUN] Would delete: $file"
-                else
-                    if rm "$file" 2>/dev/null; then
-                        log_message "INFO" "Deleted: $(basename "$file")"
-                        ((deleted_files++))
-                        ((freed_size += file_size))
-                    else
-                        log_message "ERROR" "Failed to delete: $file"
-                    fi
-                fi
-            fi
-        fi
-    done < <(find "$archive_dir" -name "$pattern" -type f -print0 2>/dev/null)
-done
+# Show what will be deleted (older than ${days_old} days)
 
-# Display summary
-echo -e "\n${BLUE}=== CLEANUP SUMMARY ===${NC}"
-echo -e "Total archive files found: $total_files"
-echo -e "Files deleted: $deleted_files"
-echo -e "Total size of archives: $(format_size $total_size)"
-echo -e "Space freed: $(format_size $freed_size)"
+LIST ARCHIVELOG UNTIL TIME ‘SYSDATE-${days_old}’;
 
-if [[ "$dry_run" == "true" ]]; then
-    echo -e "${YELLOW}This was a dry run. No files were actually deleted.${NC}"
-fi
+$(if [[ “$dry_run” == “false” ]]; then
+cat <<EOD
+
+# Crosscheck archivelog files
+
+CROSSCHECK ARCHIVELOG ALL;
+
+# Delete expired archivelog files
+
+DELETE EXPIRED ARCHIVELOG ALL;
+
+# Delete archivelog files older than ${days_old} days
+
+DELETE ARCHIVELOG UNTIL TIME ‘SYSDATE-${days_old}’;
+
+# Delete obsolete backups based on retention policy
+
+DELETE OBSOLETE;
+EOD
+fi)
+
+EXIT;
+EOF
+
+```
+echo "$script_file"
 ```
 
 }
 
-# Function to format file size
+# Function to run RMAN cleanup
 
-format_size() {
-local size=$1
-local units=(“B” “KB” “MB” “GB” “TB”)
-local unit=0
+run_rman_cleanup() {
+local db_name=$1
+local days_old=$2
+local dry_run=$3
 
 ```
-while [[ $size -gt 1024 && $unit -lt 4 ]]; do
-    ((size /= 1024))
-    ((unit++))
-done
+log_message "INFO" "Starting RMAN cleanup for database: $db_name"
+log_message "INFO" "Archive logs older than: $days_old days"
 
-echo "${size}${units[$unit]}"
+# Set environment variables
+export ORACLE_SID=$db_name
+export ORACLE_HOME=$ORACLE_HOME
+
+# Generate RMAN script
+local rman_script=$(generate_rman_script "$db_name" "$days_old" "$dry_run")
+
+log_message "INFO" "Generated RMAN script: $rman_script"
+
+if [[ "$dry_run" == "true" ]]; then
+    log_message "INFO" "DRY RUN MODE - Showing what would be deleted:"
+    echo -e "${YELLOW}=== RMAN SCRIPT CONTENT ===${NC}"
+    cat "$rman_script"
+    echo -e "${YELLOW}=== END OF SCRIPT ===${NC}"
+fi
+
+# Execute RMAN script
+log_message "INFO" "Executing RMAN cleanup..."
+
+local rman_output_file="/tmp/rman_output_${db_name}_$$.log"
+
+if $ORACLE_HOME/bin/rman @"$rman_script" > "$rman_output_file" 2>&1; then
+    log_message "INFO" "RMAN cleanup completed successfully"
+    
+    # Display summary from RMAN output
+    echo -e "\n${BLUE}=== RMAN CLEANUP SUMMARY ===${NC}"
+    
+    # Extract relevant information from RMAN output
+    if grep -q "deleted" "$rman_output_file"; then
+        grep -i "deleted\|freed\|removed" "$rman_output_file" | while read line; do
+            echo -e "${GREEN}$line${NC}"
+        done
+    fi
+    
+    if [[ "$dry_run" == "true" ]]; then
+        echo -e "${YELLOW}This was a dry run. No files were actually deleted.${NC}"
+    fi
+    
+    # Show RMAN output if verbose mode or if there were errors
+    if [[ -n "$LOG_FILE" ]]; then
+        echo -e "\n${BLUE}=== FULL RMAN OUTPUT ===${NC}" >> "$LOG_FILE"
+        cat "$rman_output_file" >> "$LOG_FILE"
+    fi
+    
+else
+    log_message "ERROR" "RMAN cleanup failed"
+    echo -e "${RED}=== RMAN ERROR OUTPUT ===${NC}"
+    cat "$rman_output_file"
+    
+    # Clean up temp files
+    rm -f "$rman_script" "$rman_output_file"
+    return 1
+fi
+
+# Clean up temp files
+rm -f "$rman_script" "$rman_output_file"
+return 0
 ```
 
+}
+
+# Function to show archive log information
+
+show_archive_info() {
+local db_name=$1
+
+```
+log_message "INFO" "Gathering archive log information for $db_name..."
+
+export ORACLE_SID=$db_name
+
+# Get archive log information
+local info_script="/tmp/archive_info_$$.sql"
+
+cat > "$info_script" <<EOF
+```
+
+SET PAGESIZE 1000
+SET LINESIZE 200
+COLUMN name FORMAT A60
+COLUMN first_time FORMAT A20
+COLUMN completion_time FORMAT A20
+
+SELECT
+COUNT(*) as “Total Archive Logs”,
+ROUND(SUM(blocks * block_size)/1024/1024, 2) as “Total Size (MB)”
+FROM v$archived_log
+WHERE deleted = ‘NO’;
+
+SELECT
+TO_CHAR(first_time, ‘YYYY-MM-DD’) as “Date”,
+COUNT(*) as “Archive Count”,
+ROUND(SUM(blocks * block_size)/1024/1024, 2) as “Size (MB)”
+FROM v$archived_log
+WHERE deleted = ‘NO’
+GROUP BY TO_CHAR(first_time, ‘YYYY-MM-DD’)
+ORDER BY 1;
+
+EXIT;
+EOF
+
+```
+echo -e "${BLUE}=== ARCHIVE LOG INFORMATION ===${NC}"
+$ORACLE_HOME/bin/sqlplus -s / as sysdba @"$info_script"
+
+rm -f "$info_script"
+```
+
+}
+
+# Function to display usage
+
+show_usage() {
+echo “Usage: $0 [OPTIONS]”
+echo “Options:”
+echo “  -d, –days DAYS           Delete archives older than DAYS (default: 10)”
+echo “  -o, –oracle-home PATH    Oracle home directory”
+echo “  -u, –user USER           RMAN user (default: /)”
+echo “  -c, –catalog CATALOG     RMAN catalog connection string”
+echo “  –dry-run                 Show what would be deleted without actually deleting”
+echo “  -l, –log FILE            Log output to file”
+echo “  -i, –info                Show archive log information only”
+echo “  -h, –help                Show this help message”
+echo “”
+echo “Example:”
+echo “  $0 –days 7 –dry-run”
+echo “  $0 –oracle-home /u01/app/oracle/product/19.0.0/dbhome_1”
 }
 
 # Main function
@@ -202,53 +367,60 @@ main() {
 show_header
 
 ```
-# Set default values
-local archive_dir="/var/backups/database"
-local days_old=10
-local dry_run=false
-local log_file=""
+local show_info_only=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -d|--directory)
-            archive_dir="$2"
+        -d|--days)
+            DAYS_OLD="$2"
             shift 2
             ;;
-        -a|--age)
-            days_old="$2"
+        -o|--oracle-home)
+            ORACLE_HOME="$2"
+            shift 2
+            ;;
+        -u|--user)
+            RMAN_USER="$2"
+            shift 2
+            ;;
+        -c|--catalog)
+            RMAN_CATALOG="$2"
             shift 2
             ;;
         --dry-run)
-            dry_run=true
+            DRY_RUN=true
             shift
             ;;
         -l|--log)
-            log_file="$2"
-            LOG_FILE="$log_file"
+            LOG_FILE="$2"
             shift 2
             ;;
+        -i|--info)
+            show_info_only=true
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS]"
-            echo "Options:"
-            echo "  -d, --directory DIR    Archive directory (default: /var/backups/database)"
-            echo "  -a, --age DAYS         Delete files older than DAYS (default: 10)"
-            echo "  --dry-run              Show what would be deleted without actually deleting"
-            echo "  -l, --log FILE         Log output to file"
-            echo "  -h, --help             Show this help message"
+            show_usage
             exit 0
             ;;
         *)
             log_message "ERROR" "Unknown option: $1"
+            show_usage
             exit 1
             ;;
     esac
 done
 
+# Check Oracle environment
+if ! check_oracle_env; then
+    exit 1
+fi
+
 # Get database name from user
 local database_name
 while true; do
-    echo -e "${BLUE}Enter the database name:${NC}"
+    echo -e "${BLUE}Enter the database name (ORACLE_SID):${NC}"
     read -p "> " database_name
     
     if validate_database_name "$database_name"; then
@@ -257,31 +429,52 @@ while true; do
     echo
 done
 
+# Test database connection
+if ! test_db_connection "$database_name"; then
+    exit 1
+fi
+
+# Show archive information if requested
+if [[ "$show_info_only" == "true" ]]; then
+    show_archive_info "$database_name"
+    exit 0
+fi
+
 # Show configuration
 echo -e "\n${BLUE}Configuration:${NC}"
-echo -e "Database name: $database_name"
-echo -e "Archive directory: $archive_dir"
-echo -e "Delete files older than: $days_old days"
-echo -e "Dry run mode: $dry_run"
-if [[ -n "$log_file" ]]; then
-    echo -e "Log file: $log_file"
+echo -e "Database name (ORACLE_SID): $database_name"
+echo -e "Oracle Home: $ORACLE_HOME"
+echo -e "Delete archives older than: $DAYS_OLD days"
+echo -e "RMAN User: $RMAN_USER"
+if [[ -n "$RMAN_CATALOG" ]]; then
+    echo -e "RMAN Catalog: $RMAN_CATALOG"
+fi
+echo -e "Dry run mode: $DRY_RUN"
+if [[ -n "$LOG_FILE" ]]; then
+    echo -e "Log file: $LOG_FILE"
 fi
 echo
 
+# Show current archive information
+show_archive_info "$database_name"
+
 # Get user confirmation
-local confirmation_msg="This will delete archive files for database '$database_name' older than $days_old days from '$archive_dir'."
-if [[ "$dry_run" == "true" ]]; then
-    confirmation_msg="This will show what archive files would be deleted (dry run mode)."
+local confirmation_msg="This will delete archive logs for database '$database_name' older than $DAYS_OLD days using RMAN."
+if [[ "$DRY_RUN" == "true" ]]; then
+    confirmation_msg="This will show what archive logs would be deleted (dry run mode)."
 fi
 
 if get_confirmation "$confirmation_msg"; then
-    cleanup_archives "$database_name" "$archive_dir" "$days_old" "$dry_run"
+    if run_rman_cleanup "$database_name" "$DAYS_OLD" "$DRY_RUN"; then
+        log_message "INFO" "RMAN cleanup completed successfully"
+    else
+        log_message "ERROR" "RMAN cleanup failed"
+        exit 1
+    fi
 else
     log_message "INFO" "Operation cancelled by user"
     exit 0
 fi
-
-log_message "INFO" "Cleanup completed"
 ```
 
 }
