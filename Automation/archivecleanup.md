@@ -1,13 +1,8 @@
 #!/bin/bash
-
 # Database Archive Cleanup Script
-
 # Deletes database archive files older than 10 days
-
 # Author: Generated Script
-
 # Date: $(date +%Y-%m-%d)
-
 # Set colors for output
 
 RED=’\033[0;31m’
