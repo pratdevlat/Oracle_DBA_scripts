@@ -1,6 +1,6 @@
 # Experience
 
-## DB Administrator
+## DB Administrato
 
 **Amdocs • Pune, Maharashtra**  
 **10/2021 - Present**
