@@ -262,7 +262,7 @@ This is classic RAC transparent application failover (TAF) without proper sessio
 
 ---
 
-**Q14: Shared Server Configuration Evaluation**
+**Q14: You're considering implementing shared server architecture for your OLTP system that has 2000 concurrent connections. What factors would you evaluate?**
 
 **A:** **Assessment Factors:**
 1. **Connection patterns:** Check `V$SESSION` for active vs. idle ratio
