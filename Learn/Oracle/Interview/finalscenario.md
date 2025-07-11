@@ -2715,3 +2715,90 @@ EOF
 # Execute main function
 main "$@"
 ```
+**Q61: How do you troubleshoot Oracle RAC performance issues when one node is significantly slower than others?**
+
+**A:** I'd check `GV$SYSSTAT` for interconnect statistics across all nodes. Look at `GV$SYSTEM_EVENT` for cluster wait events like "gc buffer busy" or "gc cr block lost". Check CPU, memory, and network utilization per node. Verify OCR/voting disk I/O performance and examine `V$CLUSTER_INTERCONNECTS` for network issues.
+
+---
+
+**Q62: Your Data Guard environment shows a significant lag between primary and standby. How do you identify and resolve the root cause?**
+
+**A:** Query `V$ARCHIVE_DEST_STATUS` and `V$DATAGUARD_STATS` to check apply lag and transport lag. Check `V$MANAGED_STANDBY` for MRP processes. Common fixes: increase `DB_RECOVERY_FILE_DEST_SIZE`, tune `LOG_ARCHIVE_DEST_n` parameters, or use Real-Time Apply. Check network bandwidth and redo generation rate.
+
+---
+
+**Q63: A table has grown from 100GB to 500GB but query performance hasn't degraded proportionally. What Oracle features might be helping?**
+
+**A:** Likely benefiting from partitioning with partition pruning, result cache, or adaptive features like automatic indexing. Check `V$RESULT_CACHE_STATISTICS` and execution plans for partition pruning. Oracle's Cost-Based Optimizer may also be using more efficient access paths with current statistics.
+
+---
+
+**Q64: You notice high "buffer busy waits" on specific data blocks. How do you identify which objects and resolve the contention?**
+
+**A:** Query `V$WAITSTAT` to identify block types causing waits. Use `V$SESSION_WAIT` with P1 (file#) and P2 (block#) to find specific objects via `DBA_EXTENTS`. Common solutions: increase INITRANS, use ASSM tablespaces, or consider partitioning for hot tables.
+
+---
+
+**Q65: Your RMAN backup window is exceeding the allowed maintenance window. What optimization strategies would you implement?**
+
+**A:** Implement incremental backups with block change tracking. Use backup compression and multiple channels for parallelism. Configure `BACKUP_TAPE_IO_SLAVES` for tape devices. Consider using `SECTION SIZE` for large datafiles and optimize `MAXPIECESIZE`. Schedule differential incremental backups during business hours.
+
+---
+
+**Q66: A query using a function-based index is not using the index. What could be the reasons and how do you fix it?**
+
+**A:** Check if query exactly matches the function in index definition. Verify `QUERY_REWRITE_ENABLED=TRUE` and gather statistics on the function-based index. Ensure the function is deterministic. Use `DBMS_STATS.GATHER_TABLE_STATS` with `method_opt` including the function.
+
+---
+
+**Q67: You're migrating from Oracle 11g to 19c and need to identify potential performance regressions. What's your approach?**
+
+**A:** Use SQL Performance Analyzer (SPA) to capture and compare SQL workload. Create SQL Tuning Sets from 11g, then run comparison analysis on 19c. Check `DBA_HIST_SQLSTAT` for performance changes. Use Real Application Testing for comprehensive workload replay and comparison.
+
+---
+
+**Q68: Your application experiences periodic 5-minute freezes every hour. How do you identify the root cause?**
+
+**A:** Check `V$ACTIVE_SESSION_HISTORY` for wait events during freeze periods. Look for scheduled jobs in `DBA_SCHEDULER_JOBS` or batch processes. Monitor `V$SYSMETRIC` for resource spikes. Check for checkpoint activity, log switches, or automatic maintenance tasks using `DBA_AUTOTASK_OPERATION`.
+
+---
+
+**Q69: A PL/SQL procedure that processes 1 million records is taking 4 hours. How do you optimize it?**
+
+**A:** Use `BULK COLLECT` and `FORALL` for array processing instead of row-by-row processing. Implement `LIMIT` clause to control memory usage. Consider `PARALLEL_ENABLE` for functions. Use `DBMS_PROFILER` or `DBMS_HPROF` to identify bottlenecks. Optimize SQL statements within the procedure.
+
+---
+
+**Q70: You need to drop a large table (500GB) with minimal impact on production. What's your approach?**
+
+**A:** Use `TRUNCATE` instead of `DELETE` if possible. For `DROP TABLE`, consider using `PURGE` option to avoid recyclebin. If downtime is critical, use online table redefinition to rename/move table first. Schedule during low-activity periods and ensure adequate space in system tablespace for metadata operations.
+
+---
+
+**Q71: Your Oracle database is experiencing high CPU usage but top SQL shows simple queries. What could be the issue?**
+
+**A:** Check for hard parsing - query `V$SYSSTAT` for parse statistics. Look for cursor sharing issues or applications not using bind variables. Check `V$OSSTAT` for context switching. Monitor `V$SYSTEM_EVENT` for latch contention. Consider SQL injection attacks causing excessive parsing.
+
+---
+
+**Q72: A materialized view refresh is taking 6 hours instead of the usual 30 minutes. How do you troubleshoot?**
+
+**A:** Check if it's doing complete refresh instead of fast refresh. Verify materialized view logs exist and are current. Look for DML activity blocking the refresh. Check `DBA_MVIEW_REFRESH_TIMES` for historical data. Consider using `DBMS_MVIEW.REFRESH` with atomic_refresh parameter.
+
+---
+
+**Q73: Your standby database is falling behind during peak hours. What immediate actions do you take?**
+
+**A:** Check network bandwidth and redo generation rate. Increase `DB_RECOVERY_FILE_DEST_SIZE` if space is low. Use Real-Time Apply mode. Consider multiple archive destinations or compression. Monitor `V$ARCHIVE_DEST` for errors and tune `LOG_ARCHIVE_DEST_n` parameters.
+
+---
+
+**Q74: You're seeing "library cache lock" waits. How do you identify and resolve the blocking session?**
+
+**A:** Query `V$SESSION_WAIT` and `V$LOCK` to find blocking sessions. Check `V$OPEN_CURSOR` for sessions holding library cache locks. Look for DDL operations, package compilation, or invalidation cascade. Use `V$SQLAREA` to identify SQL causing locks. Kill blocking session if necessary.
+
+---
+
+**Q75: A query performs well in development but poorly in production with identical data volumes. What do you investigate?**
+
+**A:** Compare optimizer statistics between environments using `DBMS_STATS.EXPORT_TABLE_STATS`. Check initialization parameters, especially optimizer-related ones. Compare execution plans and system resources. Look for concurrent activity in production affecting performance. Verify similar Oracle versions and patch levels.
