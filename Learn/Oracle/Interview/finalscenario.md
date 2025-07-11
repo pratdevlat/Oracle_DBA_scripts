@@ -724,8 +724,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q27: Upgrade Timezone Issues: Post-upgrade to 19c, some datetime calculations are returning incorrect results. You suspect timezone data issues. How do you diagnose and fix this?
-**
+**Q27: Upgrade Timezone Issues: Post-upgrade to 19c, some datetime calculations are returning incorrect results. You suspect timezone data issues. How do you diagnose and fix this?**
 
 **A:** **Diagnostic Approach:**
 1. **Check Timezone Version:**
