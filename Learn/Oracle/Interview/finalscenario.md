@@ -777,8 +777,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q28: ASM Patch Coordination: You need to patch both database and ASM to the same RU level in a production environment. What's your approach to minimize downtime?
-**
+**Q28: ASM Patch Coordination: You need to patch both database and ASM to the same RU level in a production environment. What's your approach to minimize downtime?**
 
 **A:** **Assessment:**
 - Check current ASM and DB versions: `crsctl query crs activeversion`
@@ -827,8 +826,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q29: Patch Rollback Scenario: A patch applied last week is causing intermittent ORA-600 errors. You need to rollback, but several application changes were made post-patch. What's your strategy?
-**
+**Q29: Patch Rollback Scenario: A patch applied last week is causing intermittent ORA-600 errors. You need to rollback, but several application changes were made post-patch. What's your strategy?**
 
 **A:** **Assessment:**
 - Document all changes made post-patch
@@ -874,8 +872,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q30: Cross-Platform Upgrade: You're upgrading from 12.1 on Solaris SPARC to 19c on Linux x86-64. What additional considerations and steps are required?
-**
+**Q30: Cross-Platform Upgrade: You're upgrading from 12.1 on Solaris SPARC to 19c on Linux x86-64. What additional considerations and steps are required?**
 
 **A:** **Additional Considerations:**
 1. **Endianness Check:**
@@ -927,8 +924,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q31: Data Pump Upgrade Issues: After upgrading to 19c, Data Pump jobs are failing with version compatibility errors when accessing pre-upgrade dump files. How do you resolve this?
-**
+**Q31: Data Pump Upgrade Issues: After upgrading to 19c, Data Pump jobs are failing with version compatibility errors when accessing pre-upgrade dump files. How do you resolve this?**
 
 **A:** **Assessment:**
 - Check dump file version: `impdp system/password dumpfile=old.dmp logfile=version_check.log`
@@ -969,8 +965,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q32: Statistics Gathering Post-Upgrade: After upgrading from 11.2 to 19c, many queries are performing poorly. You suspect optimizer statistics issues. What's your approach?
-**
+**Q32: Statistics Gathering Post-Upgrade: After upgrading from 11.2 to 19c, many queries are performing poorly. You suspect optimizer statistics issues. What's your approach?**
 
 **A:** **Assessment:**
 - Check current statistics: `SELECT * FROM dba_tab_statistics WHERE last_analyzed < sysdate-30;`
@@ -1012,8 +1007,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q33: OPatch Inventory Issues: The OPatch inventory is corrupted, and you can't determine which patches are installed before applying a new RU. How do you resolve this?
-**
+**Q33: OPatch Inventory Issues: The OPatch inventory is corrupted, and you can't determine which patches are installed before applying a new RU. How do you resolve this?**
 
 **A:** **Assessment:**
 - Check inventory location: `$ORACLE_HOME/inventory`
@@ -1056,8 +1050,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q34: Multi-Tenant Upgrade: During upgrade of a CDB with 50 PDBs from 12.2 to 19c, 3 PDBs fail to upgrade. How do you handle this situation?
-**
+**Q34: Multi-Tenant Upgrade: During upgrade of a CDB with 50 PDBs from 12.2 to 19c, 3 PDBs fail to upgrade. How do you handle this situation?**
 
 **A:** **Assessment:**
 - Check PDB status: `SELECT name, open_mode FROM v$pdbs;`
@@ -1145,8 +1138,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 **Monitoring:** Centralized patch management system tracking deployment status, issues, and rollback procedures across all environments.
 
 **Success Metrics:** Patch success rate >95%, zero unplanned downtime, rollback procedures tested and documented.
-**Q36: RMAN Catalog Corruption: Your RMAN catalog database crashed and the control file is corrupted. You have 15 target databases depending on this catalog. What's your immediate response?
-**
+**Q36: RMAN Catalog Corruption: Your RMAN catalog database crashed and the control file is corrupted. You have 15 target databases depending on this catalog. What's your immediate response?**
 
 **A:** **Immediate Assessment:**
 - Check catalog database status: `srvctl status database -d RMANCAT`
@@ -1189,8 +1181,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q37: Cross-Platform Restore: You need to restore a tablespace from a Linux backup to an AIX system for testing. The backup was taken with RMAN. Walk through the process.
-**
+**Q37: Cross-Platform Restore: You need to restore a tablespace from a Linux backup to an AIX system for testing. The backup was taken with RMAN. Walk through the process.**
 
 **A:** **Assessment:**
 - Check platform endianness: `SELECT platform_name, endian_format FROM v$database;`
@@ -1234,8 +1225,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q38: Incomplete Recovery Scenario: A critical table was accidentally dropped at 2 PM, but you only discovered it at 6 PM. Your last backup was at midnight, and you have all archive logs. What's your recovery strategy?
-**
+**Q38: Incomplete Recovery Scenario: A critical table was accidentally dropped at 2 PM, but you only discovered it at 6 PM. Your last backup was at midnight, and you have all archive logs. What's your recovery strategy?**
 
 **A:** **Assessment:**
 - Identify exact drop time using flashback: `SELECT timestamp FROM flashback_transaction_query`
@@ -1282,8 +1272,7 @@ EXEC DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
 
 ---
 
-**Q39: RMAN Performance Tuning: Your nightly backup window is 4 hours, but backups are taking 6 hours and growing. The database is 50TB. How do you optimize backup performance?
-**
+**Q39: RMAN Performance Tuning: Your nightly backup window is 4 hours, but backups are taking 6 hours and growing. The database is 50TB. How do you optimize backup performance?**
 
 **A:** **Assessment:**
 - Check current backup configuration: `SHOW ALL;`
